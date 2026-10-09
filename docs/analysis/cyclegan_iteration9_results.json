@@ -1,0 +1,672 @@
+{
+  "recorded_utc": "2026-10-09T12:38:17.679010+00:00",
+  "baseline_git_commit": "857e566",
+  "top": "cyclegan_bus_top",
+  "device": "Ti60F225",
+  "efinity": "2026.1.132",
+  "timing_model": "C4",
+  "staged_rtl_matches_current": true,
+  "retiming": false,
+  "synthesis_resources": {
+    "EFX_LUT4": 14683,
+    "EFX_FF": 4035,
+    "EFX_DSP48": 100,
+    "EFX_ADD": 257,
+    "EFX_SRL8": 134,
+    "EFX_RAM10": 25,
+    "EFX_DPRAM10": 170,
+    "BRAM_total": 195
+  },
+  "bram_budget": 200,
+  "cache_native_planes": {
+    "count": 160,
+    "parameters": {
+      "READ_WIDTH_B": "5",
+      "WRITE_WIDTH_B": "5",
+      "RESET_RAM_B": "\"SYNC\"",
+      "WRITE_MODE_B": "\"NO_CHANGE\""
+    }
+  },
+  "window_native_banks": {
+    "count": 8,
+    "parameters": {
+      "READ_WIDTH_A": "8",
+      "READ_WIDTH_B": "8",
+      "WRITE_MODE_A": "\"NO_CHANGE\"",
+      "WRITE_MODE_B": "\"NO_CHANGE\""
+    }
+  },
+  "pe_source_selection_lut4": 800,
+  "signed32_compact_lut4": 700,
+  "internal_timing": {
+    "target_mhz": 149.993,
+    "period_ns": 6.667,
+    "analyzed_fmax_mhz": 163.185,
+    "min_period_ns": 6.128,
+    "setup_slack_ns": 0.539,
+    "hold_slack_ns": 0.026,
+    "board_io_constrained": false,
+    "report_sha256": "f1d3b102049580a4aff77fcb4dd3d74c745f69853e7f69595a801e98b4ee4bf0",
+    "requested_mhz": 150.0,
+    "sdc_period_ns": 6.666667
+  },
+  "timing_experiments": [
+    {
+      "target_mhz": 100.0,
+      "period_ns": 10.0,
+      "analyzed_fmax_mhz": 122.085,
+      "min_period_ns": 8.191,
+      "setup_slack_ns": 1.809,
+      "hold_slack_ns": 0.026,
+      "board_io_constrained": false,
+      "report_sha256": "109cf50c3c0d7dc5694c73e53138df4bb72f980475f5b4b784dfc66a328e1194",
+      "name": "build/iteration8_baseline",
+      "resources": {
+        "EFX_LUT4": 14857,
+        "EFX_FF": 4040,
+        "EFX_DSP48": 100,
+        "EFX_ADD": 255,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 25,
+        "EFX_DPRAM10": 170
+      },
+      "map_report_sha256": "e0c14c28e65bd95d4f642057599fb914cb601b691e70af327d01c4b854cd16bf"
+    },
+    {
+      "target_mhz": 200.0,
+      "period_ns": 5.0,
+      "analyzed_fmax_mhz": 205.888,
+      "min_period_ns": 4.857,
+      "setup_slack_ns": 0.143,
+      "hold_slack_ns": 0.026,
+      "board_io_constrained": false,
+      "report_sha256": "01103f83cef829d84597662cb6d822a49479bba2c9aad3aa027288bd926210c0",
+      "name": "build/timing_baseline200",
+      "resources": {
+        "EFX_LUT4": 14857,
+        "EFX_FF": 4040,
+        "EFX_DSP48": 100,
+        "EFX_ADD": 255,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 25,
+        "EFX_DPRAM10": 170
+      },
+      "map_report_sha256": "a2b11eefab4d3c4300159a291a3dc1b2a9ad751a7f9b17c0a8c6f668a68b2b12"
+    },
+    {
+      "target_mhz": 200.0,
+      "period_ns": 5.0,
+      "analyzed_fmax_mhz": 203.998,
+      "min_period_ns": 4.902,
+      "setup_slack_ns": 0.098,
+      "hold_slack_ns": 0.026,
+      "board_io_constrained": false,
+      "report_sha256": "8e62c0ac0834b1a7cfcb1cc01235e2c803f9dc22734739d27bc1785bac193372",
+      "name": "build/timing_window_pipeline200",
+      "resources": {
+        "EFX_LUT4": 14812,
+        "EFX_FF": 4214,
+        "EFX_DSP48": 100,
+        "EFX_ADD": 257,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 25,
+        "EFX_DPRAM10": 170
+      },
+      "map_report_sha256": "1d7528e5c1e15e2665e3e818f77e696bb77db8700baaa5a875f02d469de65cfe"
+    },
+    {
+      "target_mhz": 200.0,
+      "period_ns": 5.0,
+      "analyzed_fmax_mhz": 203.625,
+      "min_period_ns": 4.911,
+      "setup_slack_ns": 0.089,
+      "hold_slack_ns": 0.028,
+      "board_io_constrained": false,
+      "report_sha256": "7cf57d979d4d95126a56747497437fb0f020877768c9f36b8e7a59cec1dec7f6",
+      "name": "build/timing_rom_or200",
+      "resources": {
+        "EFX_LUT4": 14683,
+        "EFX_FF": 4035,
+        "EFX_DSP48": 100,
+        "EFX_ADD": 257,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 25,
+        "EFX_DPRAM10": 170
+      },
+      "map_report_sha256": "32c1ba64dad2aa7f479bf9d0244ceec98db4ddfa91003d0d7a94fbbf8fb3dce8"
+    },
+    {
+      "target_mhz": 149.993,
+      "period_ns": 6.667,
+      "analyzed_fmax_mhz": 163.185,
+      "min_period_ns": 6.128,
+      "setup_slack_ns": 0.539,
+      "hold_slack_ns": 0.026,
+      "board_io_constrained": false,
+      "report_sha256": "e75835d9641682ecdb45ad5eb73ff197969f2273fadc197e0457eab776992772",
+      "name": "build/timing/cyclegan_bus_top/150",
+      "resources": {
+        "EFX_LUT4": 14683,
+        "EFX_FF": 4035,
+        "EFX_DSP48": 100,
+        "EFX_ADD": 257,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 25,
+        "EFX_DPRAM10": 170
+      },
+      "map_report_sha256": "a794bc61267467384bc808f202a12064d6880905708471ee4a558f39a4b323a4"
+    },
+    {
+      "target_mhz": 149.993,
+      "period_ns": 6.667,
+      "analyzed_fmax_mhz": 175.408,
+      "min_period_ns": 5.701,
+      "setup_slack_ns": 0.966,
+      "hold_slack_ns": 0.026,
+      "board_io_constrained": false,
+      "report_sha256": "6d91534770f70dcf65d36ef407c0ca7c480f02cd88e528809ad8b7bebff3a431",
+      "name": "build/timing/mobilenet_bus_top/150",
+      "resources": {
+        "EFX_LUT4": 14649,
+        "EFX_FF": 4023,
+        "EFX_DSP48": 100,
+        "EFX_ADD": 251,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 8,
+        "EFX_DPRAM10": 170
+      },
+      "map_report_sha256": "1db22e832a9b7263a27037db1dd1b66aeab726adcd72ed223aa05dd99fb7445a"
+    },
+    {
+      "target_mhz": 200.0,
+      "period_ns": 5.0,
+      "analyzed_fmax_mhz": 205.128,
+      "min_period_ns": 4.875,
+      "setup_slack_ns": 0.125,
+      "hold_slack_ns": 0.026,
+      "board_io_constrained": false,
+      "report_sha256": "52e7c9d6c398ca28694e81bafa6a8d8e8657a5d68da1a5a111c1d1ba2c7d759f",
+      "name": "build/timing/mobilenet_bus_top/200",
+      "resources": {
+        "EFX_LUT4": 14649,
+        "EFX_FF": 4023,
+        "EFX_DSP48": 100,
+        "EFX_ADD": 251,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 8,
+        "EFX_DPRAM10": 170
+      },
+      "map_report_sha256": "6dabb9043910a28bd43d01fa46e5da6a8335f009211eed8aa73b46fa8db758d4"
+    }
+  ],
+  "model_rom_native_output_clear": {
+    "banks": 25,
+    "reset_ram": "SYNC",
+    "read_latency_cycles": 1
+  },
+  "tests": {
+    "cache_rtl": {
+      "log": "build/sim/cache.log",
+      "sha256": "78ef647cf080f81001ec7b6fd799148658fd9561aecf91fe2dac7e16a5f0cc12",
+      "summary": "PASS cache: 4279 full-word checks, all legal/illegal addresses, masks, hold, reset and continuous reads"
+    },
+    "cache_mapped": {
+      "log": "build/sim/cache_mapped.log",
+      "sha256": "3da61d2e2347b00f1f0df0c47699c14d77fafb747588ab26cda829de61deea30",
+      "summary": "PASS cache: 4279 full-word checks, all legal/illegal addresses, masks, hold, reset and continuous reads",
+      "netlist_preparation": {
+        "source": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\mn_cache_0446d435e6c44e8689e065ac6f4249b0\\outflow\\mobilenet.map.v",
+        "source_sha256": "ab15788f160e8b2b8144ca27027367d9255c46153074caac3dc5b157144f9a23",
+        "prepared": "C:\\Users\\Administrator\\Desktop\\\u8ba1\u7b97\u5355\u5143\\build\\sim\\cache_coalesced.v",
+        "prepared_sha256": "f70f175dc8fa8f2c195ce7416145fed4eb5d4f9157d7b1deef51f2ea7c2db7fd",
+        "coalesced_output_alias_bits": 800,
+        "transformation": "800 single-bit continuous output buffers to one 800-bit buffer; all functional cells unchanged",
+        "cache_rtl_sha256": "40496814e679119db3548cf9ceb85c39cbf57e51a63644b58c15e1a78b5fda48",
+        "testbench_sha256": "fde47af06606403bdecbd0aae720eef6cc130594839e14b6c4a52643e9ad557a"
+      },
+      "compiled_simulator_sha256": "56732c89f0aac14a06fd72822e60f73b2db6221a6118ed3e38d410d4d6ae3346",
+      "reused_from_previous_iteration": true,
+      "reuse_reason": "Cache RTL and its testbench are unchanged; hashes checked above."
+    },
+    "core_rtl": {
+      "log": "build/sim/unit.log",
+      "sha256": "4c1a2b95e70ff8686d87faf6b25d350ed91562730a808b531d57f72bd10c2471",
+      "summary": "PASS: 201 cases, 252 commands, 29924 cycles",
+      "cases": 201,
+      "commands": 252,
+      "cycles": 29924,
+      "expected_error_commands": 9,
+      "metrics_sha256": "0d7a0c31929841448dd7b7159847246cf5f3e9744cb808c24970d796e8833104",
+      "execution": {
+        "jobs": 8,
+        "case_count": 201,
+        "vectors_sha256": "75934d9643a37265885ebf9e3d0971b09278e90797980cd28274a2de04671049",
+        "compiled_simulator_sha256": "a7a9e617bfd559603de59ac3a3794e65adfa75e410c7d19f36ee7f0a6eaee1bc",
+        "case_scope": "Each case initializes its own inputs; commands within a case retain queue/accumulator state.",
+        "cycles_scope": "Sum of testbench cycles; parallel runs include one reset per shard."
+      }
+    },
+    "bus_rtl": {
+      "log": "build/sim/bus.log",
+      "sha256": "ec98535a61363bd633eb8182a1c65a31b5987f8f98c8b845b2b6e1514f49ca19",
+      "summary": "PASS bus: PW/DW golden, staging, backpressure, shared 7x7/3x3 DW reset, bank2 row masks, invalid address isolation"
+    },
+    "model_assets_rtl": {
+      "log": "build/sim/assets.log",
+      "sha256": "f4aadd3e965e95d8e1867eb09a13069556501562904ca9ed27daacfd020ff8ad",
+      "summary": "PASS assets: 22016 native ROM words, 256 bank jumps, stop-read hold, 4096 Tanh addresses, backpressure, extremes and ties",
+      "testbench_sha256": "f4eb759034e23cbef46a4b94e8105049f6d984485a37f42158a107bda864fc40",
+      "compiled_simulator_sha256": "edeffee2a9944b26ef2d70b5bcc567645fd9682a4b74097ef589701fd23899e7"
+    },
+    "model_bus_rtl": {
+      "log": "build/sim/model_bus.log",
+      "sha256": "a3a680e0b703fd61f811c13b489b501431f44096cb4831a7cf24ac6413bf309e",
+      "summary": "PASS epoch11 bus: fixed ROM DW/PW/BN/CONV-Tanh/ADD, 7x7 CONV-Tanh, third bank, extended parameters; 6 commands, 1006 cycles"
+    },
+    "model_bus_mapped": {
+      "log": "build/sim/model_postmap.log",
+      "sha256": "a3a680e0b703fd61f811c13b489b501431f44096cb4831a7cf24ac6413bf309e",
+      "summary": "PASS epoch11 bus: fixed ROM DW/PW/BN/CONV-Tanh/ADD, 7x7 CONV-Tanh, third bank, extended parameters; 6 commands, 1006 cycles",
+      "compiled_simulator_sha256": "4eddc89de9531c8e4169729e1e1adfd2319172245668ce4ded0839f8df8508c2",
+      "netlist_sha256": "3db60d8cc0337f9b4a3da1ec7a8f7f094776974062b660557852a11f0094a778"
+    },
+    "postprocess_rtl": {
+      "log": "build/sim/postprocess.log",
+      "sha256": "0621e5bd25ef27b32195dda524a1aee7408539e9c519702a5d48e5c0f84162a9",
+      "summary": "PASS parallel postprocess: 205800 pixels, signed16 exhaustive, signed32 extremes, partial pooling and reset"
+    },
+    "dsp_primitive_probe": {
+      "log": "build/sim/dsp_quant_probe.log",
+      "sha256": "31924e0251f2cb66b2d4df7b87439c8d0e9fe2cff670379e8f96f6dc2da51b41",
+      "summary": "PASS W feedback: raw sum512, shifted output2, shift0 restores raw output512"
+    },
+    "shared_dw_buffer": {
+      "log": "build/sim/dw_buffer.log",
+      "sha256": "454e348e6115222778d863f2dd21234d45e6678fb1004f7ce8cd397967f0eded",
+      "summary": "PASS shared DW buffer: 216408 pixels, five kernel shapes, snake rotations, exhaustive padding and reuse",
+      "scope": "Unchanged legacy register-buffer reference; production uses the BRAM buffer below."
+    },
+    "bram_dw_buffer": {
+      "log": "build/sim/dw_buffer_bram.log",
+      "sha256": "e8125f58ac6d04aee89a2d3db2b3609a8187de11c3e63fab70ec4b309fc46f30",
+      "summary": "PASS BRAM DW buffer: 327100 pixels, eight diagonal banks, continuous snake prefetch, exhaustive padding, zero tiles and reset"
+    },
+    "pe_input_mux": {
+      "log": "build/sim/input_mux.log",
+      "sha256": "143f9baa9dca0f1544f434024fc373cb73edbcdbc8fcd60cc2745420d6d95da2",
+      "summary": "PASS PE input mux: 104000 pixels, exhaustive binary truth tables and packed lane patterns"
+    },
+    "compact": {
+      "log": "build/sim/compact.log",
+      "sha256": "aa344cf97cd6d8e17dd74cc6d58ff77e3747fa3f78ba568437cd26b5c6a79aa7",
+      "summary": "PASS compact: 134672 values, all high/sign patterns and every lane mismatch"
+    },
+    "instruction_fifo": {
+      "log": "build/sim/fifo.log",
+      "sha256": "d3d945b3b63a1bfc8ec26e81b5530ae1d953ca770eceff8497fe7dd08bc2dfaa",
+      "summary": "PASS FIFO: 1768 pushes, 1710 pops, 739 simultaneous cycles, full/empty and repeated reset"
+    },
+    "instruction_fifo_mapped": {
+      "log": "build/sim/fifo_mapped.log",
+      "sha256": "d3d945b3b63a1bfc8ec26e81b5530ae1d953ca770eceff8497fe7dd08bc2dfaa",
+      "summary": "PASS FIFO: 1768 pushes, 1710 pops, 739 simultaneous cycles, full/empty and repeated reset"
+    },
+    "all_instruction_cycles": {
+      "log": "build/sim/executor_cycles.log",
+      "sha256": "b038d53aedd4cde12ce89040f3a2a579711b377c091ff1013a96c84c692c4f28",
+      "summary": "PASS cycle model: 252 commands, execution/rounding/padding/raw/Tanh latencies"
+    },
+    "executor_timing": {
+      "log": "build/sim/executor4_timing.log",
+      "sha256": "4d7aa57b3d79b166a52c54b69ca7aa14215979c951ac6f1e09f8ef48d70f3fa2",
+      "summary": "PASS: 84 cases, 6 commands, 429 cycles",
+      "scope": "Unpadded 3x3 and 7x7 DW; four queued single-channel PW commands"
+    }
+  },
+  "full_network_instruction_model": [
+    {
+      "validation": "full encoded-instruction integer model; not RTL or FPGA",
+      "checkpoint_sha256": "7d6aaac3a6192dddde81602e6120d1aa4dc732690efb8c908cb4757e12dc9a8b",
+      "counts": {
+        "row_writes": 197400,
+        "DW": 8064,
+        "PW": 14208,
+        "NORM": 28416,
+        "tile_reads": 24960,
+        "tile_writes": 111328,
+        "ADD": 3456,
+        "CONV": 116736
+      },
+      "layers_checked": 16,
+      "final_values_checked": 230400,
+      "all_layers_equal": true,
+      "feature_storage": "host memory",
+      "cache_reserved_window_addresses": [
+        1487,
+        1535
+      ],
+      "input": "test.jpg"
+    },
+    {
+      "validation": "full encoded-instruction integer model; not RTL or FPGA",
+      "checkpoint_sha256": "7d6aaac3a6192dddde81602e6120d1aa4dc732690efb8c908cb4757e12dc9a8b",
+      "counts": {
+        "row_writes": 197400,
+        "DW": 8064,
+        "PW": 14208,
+        "NORM": 28416,
+        "tile_reads": 24960,
+        "tile_writes": 111328,
+        "ADD": 3456,
+        "CONV": 116736
+      },
+      "layers_checked": 16,
+      "final_values_checked": 230400,
+      "all_layers_equal": true,
+      "feature_storage": "host memory",
+      "cache_reserved_window_addresses": [
+        1487,
+        1535
+      ],
+      "input": "inverted test.jpg"
+    }
+  ],
+  "full_network_instruction_model_reused_from_previous_iteration": true,
+  "executor_timing": {
+    "dw3_pop": 44,
+    "dw3_mac_cycle_and_tap": [
+      [
+        107,
+        0
+      ],
+      [
+        108,
+        1
+      ],
+      [
+        109,
+        2
+      ],
+      [
+        110,
+        5
+      ],
+      [
+        111,
+        4
+      ],
+      [
+        112,
+        3
+      ],
+      [
+        113,
+        6
+      ],
+      [
+        114,
+        7
+      ],
+      [
+        115,
+        8
+      ]
+    ],
+    "dw3_done": 121,
+    "dw7_pop": 246,
+    "dw7_mac_cycle_and_tap": [
+      [
+        309,
+        0
+      ],
+      [
+        310,
+        1
+      ],
+      [
+        311,
+        2
+      ],
+      [
+        312,
+        3
+      ],
+      [
+        313,
+        4
+      ],
+      [
+        314,
+        5
+      ],
+      [
+        315,
+        6
+      ],
+      [
+        316,
+        13
+      ],
+      [
+        317,
+        12
+      ],
+      [
+        318,
+        11
+      ],
+      [
+        319,
+        10
+      ],
+      [
+        320,
+        9
+      ],
+      [
+        321,
+        8
+      ],
+      [
+        322,
+        7
+      ],
+      [
+        323,
+        14
+      ],
+      [
+        324,
+        15
+      ],
+      [
+        325,
+        16
+      ],
+      [
+        326,
+        17
+      ],
+      [
+        327,
+        18
+      ],
+      [
+        328,
+        19
+      ],
+      [
+        329,
+        20
+      ],
+      [
+        330,
+        27
+      ],
+      [
+        331,
+        26
+      ],
+      [
+        332,
+        25
+      ],
+      [
+        333,
+        24
+      ],
+      [
+        334,
+        23
+      ],
+      [
+        335,
+        22
+      ],
+      [
+        336,
+        21
+      ],
+      [
+        337,
+        28
+      ],
+      [
+        338,
+        29
+      ],
+      [
+        339,
+        30
+      ],
+      [
+        340,
+        31
+      ],
+      [
+        341,
+        32
+      ],
+      [
+        342,
+        33
+      ],
+      [
+        343,
+        34
+      ],
+      [
+        344,
+        41
+      ],
+      [
+        345,
+        40
+      ],
+      [
+        346,
+        39
+      ],
+      [
+        347,
+        38
+      ],
+      [
+        348,
+        37
+      ],
+      [
+        349,
+        36
+      ],
+      [
+        350,
+        35
+      ],
+      [
+        351,
+        42
+      ],
+      [
+        352,
+        43
+      ],
+      [
+        353,
+        44
+      ],
+      [
+        354,
+        45
+      ],
+      [
+        355,
+        46
+      ],
+      [
+        356,
+        47
+      ],
+      [
+        357,
+        48
+      ]
+    ],
+    "dw7_done": 363,
+    "pw_queued_pops": [
+      380,
+      390,
+      400,
+      410
+    ],
+    "pw_dones": [
+      389,
+      399,
+      409,
+      419
+    ],
+    "execution_cycles": [
+      77,
+      117,
+      9,
+      9,
+      9,
+      9
+    ],
+    "queued_switch_cycles": 1
+  },
+  "host_protocol": {
+    "row_commits_checked": 70,
+    "addresses_checked": 7,
+    "scope": "Python protocol model; separate RTL bus tests"
+  },
+  "limitations": [
+    "host keeps full feature maps and interleaves transpose phases",
+    "no board transport, DDR DMA or autonomous FPGA layer scheduler",
+    "no full-frame RTL simulation or on-board inference validation"
+  ],
+  "rtl_sha256": {
+    "rtl/cyclegan_bus_top.sv": "4f5bd6ba405af202f8e91905cd10ef472a42cade8b05424db5582b856966d201",
+    "rtl/mn_cache.sv": "40496814e679119db3548cf9ceb85c39cbf57e51a63644b58c15e1a78b5fda48",
+    "rtl/mn_compact.sv": "88c64acd9beeb34b4fc847c13cc1a16b312f9ba567d1911c5fcbacbb7b3b76b0",
+    "rtl/mn_dw_buffer.sv": "5102aa6224d4b80009ff1ee260978cbc31625071dd60465636e29a344ab51422",
+    "rtl/mn_dw_buffer_bram.sv": "1177ded088044cf0c63ac21be82aa9e23e176eb9a75f49a30269d168a5579356",
+    "rtl/mn_input_mux.sv": "00d017fb5fca1a319afa410af1a9e4a449fa4ed018a20e1f357e259810e9a13b",
+    "rtl/mn_instruction_fifo.sv": "40b7810b326af113384f45def9e63d65409256f616a1527cdfa87cef1ff58992",
+    "rtl/mn_model_rom.sv": "5097fd825901d906370ead85ab02f09d38460679c26e44167a0ae6f37234fc99",
+    "rtl/mn_param_ram.sv": "d372d31db182b38b5b8c3a29ec6b0879f3e7b8057e96465089b4e05c22c4b742",
+    "rtl/mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+    "rtl/mn_postprocess.sv": "7df8637fa2e6b9306684b3cf308831e9ced85cf81394a39738c682cc307f66b9",
+    "rtl/mn_tanh.sv": "c0d92dc594e613ef65155b82209cc3bd67c613d29729258a942093833c3c339b",
+    "rtl/mobilenet_bus_top.sv": "98bb881bb50aec92aaae46cadb7aec4210fc60e3176a697cc5fb0f8361c19ac4",
+    "rtl/mobilenet_unit.sv": "58f742fed64ce46c5d49ed4a1b34ed393d8a9398aa05746eb05696c666d56b84",
+    "rtl/mn_isa.vh": "a10e107fc2ecaed335599d7abbf9996f4e00f8eba809b0e94a453d9bb4af9843",
+    "rtl/mn_model_params_init.vh": "a5ed47a992edde66a0a482a74b67b3f9e7b36159df70a628ceaea2d01e3c16fc",
+    "rtl/mn_tanh_u8.mem": "7584e60281f74b0d8744f56b3e1c902bc22ace91150b64791d49bd2c248a4478"
+  },
+  "report_sha256": {
+    "mobilenet.map.rpt": "32c1ba64dad2aa7f479bf9d0244ceec98db4ddfa91003d0d7a94fbbf8fb3dce8",
+    "mobilenet.timing.rpt": "f1d3b102049580a4aff77fcb4dd3d74c745f69853e7f69595a801e98b4ee4bf0",
+    "mobilenet.place.rpt": "bf5e8f379d9cd7d3e21454ee6f879642242a9c8dc548f9c1b7f8a304a021a78d"
+  }
+}

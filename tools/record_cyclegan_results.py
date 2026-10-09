@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+from check_timing import read_timing
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,8 +29,9 @@ def main():
     cli.add_argument('--unit-log', default='build/sim/unit.log')
     cli.add_argument('--bus-log', default='build/sim/bus.log')
     cli.add_argument('--metrics', type=Path, default=ROOT/'build/sim/commands.csv')
-    cli.add_argument('--output', type=Path, default=ROOT/'docs/analysis/cyclegan_iteration8_results.json')
-    cli.add_argument('--baseline', default='86ea032')
+    cli.add_argument('--output', type=Path, default=ROOT/'docs/analysis/cyclegan_iteration9_results.json')
+    cli.add_argument('--baseline', default='857e566')
+    cli.add_argument('--timing-trial-directory', type=Path, action='append', default=[])
     cli.add_argument('--bram-budget', type=int, default=200)
     args = cli.parse_args()
     reports = ROOT/'build/efinity/outflow'
@@ -63,10 +65,25 @@ def main():
     resource = {name: number(name) for name in ('EFX_LUT4', 'EFX_FF', 'EFX_DSP48',
                                               'EFX_ADD', 'EFX_SRL8', 'EFX_RAM10', 'EFX_DPRAM10')}
     resource['BRAM_total'] = resource['EFX_RAM10']+resource['EFX_DPRAM10']
-    timing = (reports/'mobilenet.timing.rpt').read_text()
-    setup = float(re.search(r'Setup \(Max\).*?clk\s+clk\s+10\.000\s+([\d.-]+)', timing, re.S).group(1))
-    hold = float(re.search(r'Hold \(Min\).*?clk\s+clk\s+0\.000\s+([\d.-]+)', timing, re.S).group(1))
-    assert resource['BRAM_total'] <= args.bram_budget and setup >= 0 and hold >= 0
+    timing = read_timing(reports/'mobilenet.timing.rpt')
+    staged_period = float(re.search(r'-period\s+([\d.]+)', (stage/'mobilenet.sdc').read_text()).group(1))
+    assert abs(staged_period-timing['period_ns']) <= 0.000501
+    timing['requested_mhz'] = round(1000/staged_period, 3)
+    timing['sdc_period_ns'] = staged_period
+    assert resource['BRAM_total'] <= args.bram_budget
+    assert timing['setup_slack_ns'] >= 0 and timing['hold_slack_ns'] >= 0
+    rom_resets = re.findall(r'defparam \\core/unit/model_parameters.parameters/g_packed.g_compact.g_(?:low|high)\[\d+\].u_rom \.RESET_RAM = ([^;]+);', netlist)
+    assert len(rom_resets) == 25 and set(rom_resets) == {'"SYNC"'}
+    trials = []
+    for directory in args.timing_trial_directory:
+        trial_reports = directory/'outflow'
+        trial = read_timing(trial_reports/'mobilenet.timing.rpt')
+        trial_mapping = (trial_reports/'mobilenet.map.rpt').read_text()
+        trial['name'] = directory.as_posix()
+        trial['resources'] = {name: int(re.search(rf'{name}\s*:\s*(\d+)', trial_mapping).group(1))
+                              for name in resource if name != 'BRAM_total'}
+        trial['map_report_sha256'] = sha(trial_reports/'mobilenet.map.rpt')
+        trials.append(trial)
     with args.metrics.open() as stream:
         commands = list(csv.DictReader(stream))
     tests = {
@@ -86,6 +103,10 @@ def main():
     tests['bram_dw_buffer'] = passed('build/sim/dw_buffer_bram.log', r'PASS BRAM DW buffer:[^\r\n]+')
     tests['pe_input_mux'] = passed('build/sim/input_mux.log', r'PASS PE input mux:[^\r\n]+')
     tests['compact'] = passed('build/sim/compact.log', r'PASS compact:[^\r\n]+')
+    tests['model_assets_rtl']['testbench_sha256'] = sha(ROOT/'sim/tb_model_assets.sv')
+    tests['model_assets_rtl']['compiled_simulator_sha256'] = sha(ROOT/'build/sim/assets.vvp')
+    tests['model_bus_mapped']['compiled_simulator_sha256'] = sha(ROOT/'build/sim/model_postmap.vvp')
+    tests['model_bus_mapped']['netlist_sha256'] = sha(reports/'mobilenet.map.v')
     cache_preparation = json.loads((ROOT/'build/sim/cache_netlist.json').read_text())
     assert cache_preparation['coalesced_output_alias_bits'] == 800
     assert cache_preparation['source_sha256'] == sha(Path(cache_preparation['source']))
@@ -150,8 +171,10 @@ def main():
               'window_native_banks': {'count': 8, 'parameters': window_parameters},
               'pe_source_selection_lut4': len(input_masks),
               'signed32_compact_lut4': len(compact_masks),
-              'internal_timing': {'target_mhz': 100, 'setup_slack_ns': setup,
-                                  'hold_slack_ns': hold, 'board_io_constrained': False},
+              'internal_timing': timing,
+              'timing_experiments': trials,
+              'model_rom_native_output_clear': {'banks': len(rom_resets), 'reset_ram': 'SYNC',
+                                               'read_latency_cycles': 1},
               'tests': tests, 'full_network_instruction_model': frames,
               'full_network_instruction_model_reused_from_previous_iteration': True,
               'executor_timing': executor_timing,

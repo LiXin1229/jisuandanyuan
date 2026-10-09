@@ -31,6 +31,20 @@ module tb_model_assets;
                 @(posedge clk);#1;if(data!==held) $fatal(1,"Disabled ROM output changed");
             end
         end
+        // Bank jumps and back-to-back reads detect stale output latches in
+        // the synchronous-clear/OR ROM implementation.
+        for(i=0;i<256;i=i+1) begin
+            @(negedge clk);addr=(i*7919+21997)%22016;rd_en=1;
+            @(posedge clk);#1;
+            if(data!==expected[addr]) $fatal(1,"Model ROM bank-jump mismatch at %0d",addr);
+            if(i%7==0) begin
+                held=data;@(negedge clk);rd_en=0;addr=(i*3571)%22016;
+                repeat(2) begin
+                    @(posedge clk);#1;
+                    if(data!==held) $fatal(1,"Disabled ROM changed during bank jump");
+                end
+            end
+        end
         @(negedge clk);rd_en=0;
         for(batch=0;batch<42;batch=batch+1) begin
             for(p=0;p<100;p=p+1) begin
@@ -64,7 +78,7 @@ module tb_model_assets;
             packed_index=(((p/10)/5)*2+(p%10)/5)*25+((p/10)%5)*5+(p%10)%5;
             if(result[packed_index*8+:8]!==lut[code]) $fatal(1,"Tanh overflow/rounding mismatch");
         end
-        $display("PASS assets: 22016 native ROM words, stop-read hold, 4096 Tanh addresses, backpressure, extremes and ties");
+        $display("PASS assets: 22016 native ROM words, 256 bank jumps, stop-read hold, 4096 Tanh addresses, backpressure, extremes and ties");
         $finish;
     end
     initial begin #1000000;$fatal(1,"Asset test timeout");end

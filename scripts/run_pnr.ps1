@@ -1,4 +1,4 @@
-param([string]$EfinityRoot = 'D:\Efinity\2026.1')
+param([string]$EfinityRoot = 'D:\Efinity\2026.1', [string]$Python = 'python')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
@@ -16,4 +16,6 @@ try {
         Pop-Location
         Copy-Item -LiteralPath (Join-Path $implementationStage 'outflow') -Destination build/efinity -Recurse -Force
     }
+    & $Python tools/check_timing.py build/efinity/outflow/mobilenet.timing.rpt --output build/efinity/timing.json
+    if ($LASTEXITCODE -ne 0) { throw 'Internal setup/hold timing did not close' }
 } finally { Pop-Location }

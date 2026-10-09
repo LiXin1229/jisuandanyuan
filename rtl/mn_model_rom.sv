@@ -13,7 +13,19 @@ module mn_model_rom #(parameter PACKED=1)(input wire clk,rd_en,input wire [14:0]
   if(PARAM_ROM_COMPACT) begin:g_compact
    localparam LOW_BANKS=(WORDS+1023)/1024,HIGH_BANKS=(WORDS+8191)/8192;
    wire [9:0] low_q[0:LOW_BANKS-1];wire high_q[0:HIGH_BANKS-1];
-   reg [4:0] low_bank;reg [1:0] high_bank;
+   reg [9:0] low_word;
+   reg high_word;
+   integer bank_index;
+   // On each accepted read, the selected bank reads and all other banks
+   // synchronously clear their output latch. A balanced OR replaces the
+   // bank-select mux without adding a read cycle or fabric registers.
+   always @* begin
+    low_word=0;high_word=0;
+    for(bank_index=0;bank_index<LOW_BANKS;bank_index=bank_index+1)
+     low_word=low_word|low_q[bank_index];
+    for(bank_index=0;bank_index<HIGH_BANKS;bank_index=bank_index+1)
+     high_word=high_word|high_q[bank_index];
+   end
    reg exception_valid;reg [15:0] exception_q;
    wire [PARAM_ROM_EXCEPTION_COUNT>0 ? PARAM_ROM_EXCEPTION_COUNT-1 : 0:0] hit;
    genvar b,e;
@@ -28,7 +40,7 @@ module mn_model_rom #(parameter PACKED=1)(input wire clk,rd_en,input wire [14:0]
      exceptional=exceptional|(param_exception_value(n)&{16{hit[n]}});
    end
    for(b=0;b<LOW_BANKS;b=b+1) begin:g_low
-    EFX_RAM10 #(.READ_WIDTH(10),.WRITE_WIDTH(10),.OUTPUT_REG(0),.RESET_RAM("NONE"),
+    EFX_RAM10 #(.READ_WIDTH(10),.WRITE_WIDTH(10),.OUTPUT_REG(0),.RESET_RAM("SYNC"),
      .INIT_0(packed_rom_init(b,0)),
      .INIT_1(packed_rom_init(b,1)),
      .INIT_2(packed_rom_init(b,2)),
@@ -69,12 +81,12 @@ module mn_model_rom #(parameter PACKED=1)(input wire clk,rd_en,input wire [14:0]
      .INIT_25(packed_rom_init(b,37)),
      .INIT_26(packed_rom_init(b,38)),
      .INIT_27(packed_rom_init(b,39))) u_rom(
-      .RCLK(clk),.RE(rd_en && addr[14:10]==b),.RST(1'b0),.RADDREN(1'b1),
+      .RCLK(clk),.RE(rd_en),.RST(addr[14:10]!=b),.RADDREN(1'b1),
       .RADDR(addr[9:0]),.RDATA(low_q[b]),
       .WCLK(clk),.WCLKE(1'b0),.WADDREN(1'b0),.WE(2'b00),.WADDR(10'd0),.WDATA(10'd0));
    end
    for(b=0;b<HIGH_BANKS;b=b+1) begin:g_high
-    EFX_RAM10 #(.READ_WIDTH(1),.WRITE_WIDTH(1),.OUTPUT_REG(0),.RESET_RAM("NONE"),
+    EFX_RAM10 #(.READ_WIDTH(1),.WRITE_WIDTH(1),.OUTPUT_REG(0),.RESET_RAM("SYNC"),
      .INIT_0(packed_rom_init(LOW_BANKS+b,0)),
      .INIT_1(packed_rom_init(LOW_BANKS+b,1)),
      .INIT_2(packed_rom_init(LOW_BANKS+b,2)),
@@ -115,15 +127,14 @@ module mn_model_rom #(parameter PACKED=1)(input wire clk,rd_en,input wire [14:0]
      .INIT_25(packed_rom_init(LOW_BANKS+b,37)),
      .INIT_26(packed_rom_init(LOW_BANKS+b,38)),
      .INIT_27(packed_rom_init(LOW_BANKS+b,39))) u_rom(
-      .RCLK(clk),.RE(rd_en && addr[14:13]==b),.RST(1'b0),.RADDREN(1'b1),
+      .RCLK(clk),.RE(rd_en),.RST(addr[14:13]!=b),.RADDREN(1'b1),
       .RADDR(addr[12:0]),.RDATA(high_q[b]),
       .WCLK(clk),.WCLKE(1'b0),.WADDREN(1'b0),.WE(2'b00),.WADDR(13'd0),.WDATA(1'd0));
    end
    always @(posedge clk) if(rd_en) begin
-    low_bank<=addr[14:10];high_bank<=addr[14:13];
     exception_valid<=|hit;exception_q<=exceptional;
    end
-   assign data=exception_valid ? exception_q : {{5{high_q[high_bank]}},high_q[high_bank],low_q[low_bank]};
+   assign data=exception_valid ? exception_q : {{6{high_word}},low_word};
   end else begin:g_dense
   wire [79:0] q[0:BANKS-1];reg [3:0] bank;reg [2:0] lane;
   wire [12:0] row_addr=addr/15'd5;

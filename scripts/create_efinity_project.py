@@ -7,8 +7,11 @@ import shutil
 root=Path(__file__).resolve().parent.parent
 parser=argparse.ArgumentParser()
 parser.add_argument("--staging",type=Path)
+parser.add_argument("--clock-mhz",type=float,default=150.0)
 parser.add_argument("--top",choices=["mobilenet_bus_top","cyclegan_bus_top","mn_instruction_fifo","mn_cache"],default="mobilenet_bus_top")
 args=parser.parse_args()
+if args.clock_mhz<=0:
+    parser.error("--clock-mhz must be positive")
 destination=args.staging or root / "build" / "efinity"
 destination.mkdir(parents=True,exist_ok=True)
 ns="http://www.efinixinc.com/enf_proj"
@@ -55,5 +58,5 @@ pnr=node(project,"place_and_route",tool_name="efx_pnr")
 node(pnr,"param",name="work_dir",value="work_pnr",value_type="e_string")
 node(pnr,"param",name="max_threads",value="4",value_type="e_integer")
 ET.ElementTree(project).write(destination/"mobilenet.xml",encoding="utf-8",xml_declaration=True)
-(destination/"mobilenet.sdc").write_text("create_clock -name clk -period 10.000 [get_ports clk]\n",encoding="ascii")
+(destination/"mobilenet.sdc").write_text(f"create_clock -name clk -period {1000/args.clock_mhz:.6f} [get_ports clk]\n",encoding="ascii")
 print(destination/"mobilenet.xml")
