@@ -1,0 +1,86 @@
+{
+  "debug_cores": [
+    {
+      "name": "vio0",
+      "type": "vio",
+      "uuid": "e3167cfe3110414c8c948a9d7e1e3ac5",
+      "probes": [
+        {
+          "name": "status",
+          "width": 32,
+          "init": null
+        },
+        {
+          "name": "cycles",
+          "width": 32,
+          "init": null
+        },
+        {
+          "name": "mac_cycles",
+          "width": 32,
+          "init": null
+        },
+        {
+          "name": "first_cycle",
+          "width": 32,
+          "init": null
+        },
+        {
+          "name": "counts",
+          "width": 32,
+          "init": null
+        },
+        {
+          "name": "frame_id",
+          "width": 32,
+          "init": null
+        },
+        {
+          "name": "calibration",
+          "width": 32,
+          "init": null
+        },
+        {
+          "name": "encoder_cycles",
+          "width": 32,
+          "init": null
+        },
+        {
+          "name": "residual_cycles",
+          "width": 32,
+          "init": null
+        },
+        {
+          "name": "progress",
+          "width": 32,
+          "init": null
+        },
+        {
+          "name": "read_data0",
+          "width": 256,
+          "init": null
+        },
+        {
+          "name": "read_data1",
+          "width": 256,
+          "init": null
+        },
+        {
+          "name": "block_metric",
+          "width": 32,
+          "init": null
+        },
+        {
+          "name": "command",
+          "width": 32,
+          "init": "0x0"
+        }
+      ]
+    }
+  ],
+  "session": {
+    "debug_widget": [],
+    "wizard": {}
+  },
+  "jtag_user": "USER1"
+}

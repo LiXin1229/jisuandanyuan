@@ -47,3 +47,5 @@ $modelPython='C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime
 RTL 仿真使用 Icarus Verilog。综合脚本为 Efinity 建立 ASCII 路径副本，报告复制到 `build/efinity/outflow`；默认时钟为 150 MHz。`run_pnr.ps1` 会检查 setup 和 hold，任一负余量都报错。独立时序对照可用 `run_timing_sweep.ps1 -Frequencies 150,200`，结果保存在 `build/timing`，不覆盖生产报告。默认 `run_synthesis.ps1` 仍综合可写参数顶层；其综合网表测试用 `run_postmap_sim.ps1`。固定模型综合网表测试用 `run_cyclegan_checks.ps1`。
 
 板上使用时，当前已有官方 JTAG 上传/回读、DDR 帧缓冲和整网自主调度。执行 `scripts/run_output_board.ps1 -Program -RepeatBoot` 可构建、烧录并验证包含 7×7 输出与 Tanh 的完整生成器；各历史阶段构建脚本保留。复现步骤、统计协议、DDR 特征/输出布局见 [第四阶段部署记录](docs/cyclegan_stage4_deployment.md)。
+
+实时摄像头版本执行 `scripts/run_video_board.ps1 -Program`：SC2210 → BGGR/自动白平衡/Gamma → 320×240 完整网络 → HDMI，实体按键可切换原图与网络结果。运行 `scripts/verify_video_board.ps1` 可进行同帧数值比较和连续视频测试，详见 [实时视频部署记录](docs/cyclegan_video_deployment.md)。

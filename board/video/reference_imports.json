@@ -1,0 +1,78 @@
+{
+  "camera_sc2210.v": {
+    "source": "camera/rtl/camera_sc2210.v",
+    "source_sha256": "9c26395e1df736d87d8e1821eaa489f26c45023062b16f95f35c284f5905260c"
+  },
+  "camera_crop_bayer.v": {
+    "source": "camera/rtl/camera_crop_bayer.v",
+    "source_sha256": "45c4e3b8fb524278cea218abdf28dd723dae2cf4059eb127ef6ae51e085d9e26"
+  },
+  "camera_isp.v": {
+    "source": "camera/rtl/camera_isp.v",
+    "source_sha256": "a71b1f02abea9a4d5313238f61061aec9de65185512819d05d883986b0a15fc6"
+  },
+  "camera_pool2x2.v": {
+    "source": "camera/rtl/camera_pool2x2.v",
+    "source_sha256": "d7f3b776dbf4040239f808b4607c9ed20421267d1c60d2bfd86003a508e6927d"
+  },
+  "camera_frame_pingpong.v": {
+    "source": "camera/rtl/camera_frame_pingpong.v",
+    "source_sha256": "66c5bb48513520324b83ca32f87821ea769e659a910e271cb71ce40e7481363b"
+  },
+  "camera_frame_copy.v": {
+    "source": "camera/rtl/camera_frame_copy.v",
+    "source_sha256": "157570ff79fc3c3df529dc3763cabe5f9d3cced1981710eb14e6ef89d1b5bda1"
+  },
+  "camera_schedule.v": {
+    "source": "camera/rtl/camera_schedule.v",
+    "source_sha256": "4993664d9200d45dae71961ab109611b5b4746dc35842e7f0980a3585d15d921"
+  },
+  "camera_key.v": {
+    "source": "camera/rtl/camera_key.v",
+    "source_sha256": "3c8929150c1a3ce214d4b880cbfc1237f385e86146f007003c72d61c57e6174a"
+  },
+  "camera_hdmi.v": {
+    "source": "camera/rtl/camera_hdmi.v",
+    "source_sha256": "e84474fe896667e3e0e153080c355a7386810b42e0118ba82af2085319a669d9"
+  },
+  "camera_axi_mux.v": {
+    "source": "camera/rtl/camera_axi_mux.v",
+    "source_sha256": "a94fd0286c5e788ba3ea937af09353a85c61e5457069a601559bb92df5bf64e1"
+  },
+  "axi_read_arbiter2.v": {
+    "source": "generator/rtl/axi_read_arbiter2.v",
+    "source_sha256": "66b53752edb92b7b58ec1186ef7430154ed3c5d62055622fa8c67740a202c1f8"
+  },
+  "axi_write_arbiter2.v": {
+    "source": "generator/rtl/axi_write_arbiter2.v",
+    "source_sha256": "4d60dd4f6ae143776ed4ae544032e106279c893564904d1b50a9c579ae23d88a"
+  },
+  "MIPIRx4LaneFre.v": {
+    "source": "04-1_Ti60_SC2210_HDMI_1080P60/pri/mipi/MIPIRx4LaneFre.v",
+    "source_sha256": "642c0b354d9d9c9c40ba41585869b8edcc2c95f1dc111cf9225ca3b53e1027e4"
+  },
+  "tmds_channel.v": {
+    "source": "04-1_Ti60_SC2210_HDMI_1080P60/src/hdmi_ip/tmds_channel.v",
+    "source_sha256": "ae2b47914d9cf7e313585bfa3c035e99c88e03aa8a31e7a495c677a791d62b6e"
+  },
+  "i2c_timing_ctrl_reg16_dat8_wronly.v": {
+    "source": "04-1_Ti60_SC2210_HDMI_1080P60/src/cmos_i2c/i2c_timing_ctrl_reg16_dat8_wronly.v",
+    "source_sha256": "5998ef789affce725cd4c385b124b247bb82f7f654668ded4c88b13703afc8fd"
+  },
+  "I2C_SC2210_19201080_4Lanes_Config.v": {
+    "source": "04-1_Ti60_SC2210_HDMI_1080P60/src/cmos_i2c/I2C_SC2210_19201080_4Lanes_Config.v",
+    "source_sha256": "0a2525ff9257c2e2031f0257ed0eb6589bc01a9783e4d317d1b8e07163bae9af"
+  },
+  "camera_gamma.mem": {
+    "source": "camera/camera_gamma.mem",
+    "source_sha256": "792e4f1049dd597f9a7a929b5ea138275624b7821510b44d4cd03bce3e22ecdd"
+  },
+  "gamma_provenance.json": {
+    "source": "camera/gamma_provenance.json",
+    "source_sha256": "e3c2d2d6145d426eb634d6d4e4515d34a78c8dc3c6c2c2102322df7dc14eb96e"
+  },
+  "cyclegan_camera_board.sv": {
+    "source": "camera/rtl/camera_board.v",
+    "source_sha256": "8f16dd17846c09e5549d588af25ab073946d435e8f117f2d95a3022680a3678a"
+  }
+}
