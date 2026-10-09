@@ -28,8 +28,8 @@ def main():
     cli.add_argument('--unit-log', default='build/sim/unit.log')
     cli.add_argument('--bus-log', default='build/sim/bus.log')
     cli.add_argument('--metrics', type=Path, default=ROOT/'build/sim/commands.csv')
-    cli.add_argument('--output', type=Path, default=ROOT/'docs/analysis/cyclegan_iteration7_results.json')
-    cli.add_argument('--baseline', default='45fec6e')
+    cli.add_argument('--output', type=Path, default=ROOT/'docs/analysis/cyclegan_iteration8_results.json')
+    cli.add_argument('--baseline', default='86ea032')
     cli.add_argument('--bram-budget', type=int, default=200)
     args = cli.parse_args()
     reports = ROOT/'build/efinity/outflow'
@@ -53,6 +53,12 @@ def main():
         matches = re.findall(r'defparam \\core/unit/cache/plane\[\d+\]\.ram \.'+name+r' = ([^;]+);', netlist)
         assert len(matches) == 160 and set(matches) == {value}
         cache_parameters[name] = value
+    window_parameters = {}
+    for name,value in (('READ_WIDTH_A','8'), ('READ_WIDTH_B','8'),
+                       ('WRITE_MODE_A','"NO_CHANGE"'), ('WRITE_MODE_B','"NO_CHANGE"')):
+        matches = re.findall(r'defparam \\core/unit/windows/bank\[\d+\]\.ram \.'+name+r' = ([^;]+);', netlist)
+        assert len(matches) == 8 and set(matches) == {value}
+        window_parameters[name] = value
     number = lambda name: int(re.search(rf'{name}\s*:\s*(\d+)', mapping).group(1))
     resource = {name: number(name) for name in ('EFX_LUT4', 'EFX_FF', 'EFX_DSP48',
                                               'EFX_ADD', 'EFX_SRL8', 'EFX_RAM10', 'EFX_DPRAM10')}
@@ -76,6 +82,8 @@ def main():
     if (ROOT/'build/sim/dsp_quant_probe.log').exists():
         tests['dsp_primitive_probe'] = passed('build/sim/dsp_quant_probe.log', r'PASS W feedback:[^\r\n]+')
     tests['shared_dw_buffer'] = passed('build/sim/dw_buffer.log', r'PASS shared DW buffer:[^\r\n]+')
+    tests['shared_dw_buffer']['scope'] = 'Unchanged legacy register-buffer reference; production uses the BRAM buffer below.'
+    tests['bram_dw_buffer'] = passed('build/sim/dw_buffer_bram.log', r'PASS BRAM DW buffer:[^\r\n]+')
     tests['pe_input_mux'] = passed('build/sim/input_mux.log', r'PASS PE input mux:[^\r\n]+')
     tests['compact'] = passed('build/sim/compact.log', r'PASS compact:[^\r\n]+')
     cache_preparation = json.loads((ROOT/'build/sim/cache_netlist.json').read_text())
@@ -86,6 +94,8 @@ def main():
     assert cache_preparation['testbench_sha256'] == sha(ROOT/'sim/tb_cache.sv')
     tests['cache_mapped']['netlist_preparation'] = cache_preparation
     tests['cache_mapped']['compiled_simulator_sha256'] = sha(ROOT/'build/sim/cache_mapped.vvp')
+    tests['cache_mapped']['reused_from_previous_iteration'] = True
+    tests['cache_mapped']['reuse_reason'] = 'Cache RTL and its testbench are unchanged; hashes checked above.'
     tests['instruction_fifo'] = passed('build/sim/fifo.log', r'PASS FIFO:[^\r\n]+')
     tests['instruction_fifo_mapped'] = passed('build/sim/fifo_mapped.log', r'PASS FIFO:[^\r\n]+')
     tests['all_instruction_cycles'] = passed('build/sim/executor_cycles.log', r'PASS cycle model:[^\r\n]+')
@@ -97,9 +107,9 @@ def main():
     macs = [[int(x), int(y)] for x,y in re.findall(r'TIMING_MAC cycle=(\d+) tap=(\d+)', trace)]
     assert len(pops) == len(dones) == 6
     execution = [b-a for a,b in zip(pops,dones)]
-    assert execution == [30,66,9,9,9,9]
+    assert execution == [77,117,9,9,9,9]
     assert len(macs) == 58
-    for i,width,start,length in ((0,3,16,9),(1,7,12,49)):
+    for i,width,start,length in ((0,3,63,9),(1,7,63,49)):
         group = macs[:9] if i == 0 else macs[9:]
         expected = [r*width+c for r in range(width)
                     for c in (range(width) if r%2 == 0 else range(width-1,-1,-1))]
@@ -137,6 +147,7 @@ def main():
               'synthesis_resources': resource,
               'bram_budget': args.bram_budget,
               'cache_native_planes': {'count': 160, 'parameters': cache_parameters},
+              'window_native_banks': {'count': 8, 'parameters': window_parameters},
               'pe_source_selection_lut4': len(input_masks),
               'signed32_compact_lut4': len(compact_masks),
               'internal_timing': {'target_mhz': 100, 'setup_slack_ns': setup,

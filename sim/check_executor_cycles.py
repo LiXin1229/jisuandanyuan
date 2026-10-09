@@ -41,8 +41,9 @@ for command, row in zip(commands, rows):
                      bool(edges & 4) and reflect,
                      bool(edges & 8) and (reflect or valid_h != 10)))
         area = (2, 2, 4, 9, 49)[kernel]
-        origin = 0 if kernel == 4 else 2 if kernel == 3 else 3
-        expected = area+17+2*origin+3*sides-raw
+        # 48 backing-store row writes, overlapped cache requests, ten live
+        # rows and a one-clock border prefetch; each padding line takes 3 clocks.
+        expected = area+68+9*sides-raw
         if field(118) and not raw:
             expected += 54
     actual = int(row['cycles'])-1

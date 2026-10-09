@@ -23,7 +23,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
 );
     localparam IDLE=0,CHECK=1,CLEAR=2,LOAD=3,LOAD_DRAIN=4,PAD_X=5,PAD_Y=6,
         DW_RUN=7,PW_RUN=8,N_X=9,ADD_FIRST=10,ADD_SECOND=11,
-        WAIT_PE=12,WAIT_POST=13,WAIT_TANH=14,COMPLETE=15,ALIGN_X=16,ALIGN_Y=17;
+        WAIT_PE=12,WAIT_POST=13,WAIT_TANH=14,COMPLETE=15,INIT_WAIT=18;
     localparam SRC_WINDOW=0,SRC_CACHE=1,SRC_BIAS=2,SRC_ROUND=3;
     localparam [10:0] WINDOW_BASE=11'd1487; // Preserve the public V2 address limit.
     reg [4:0] state;
@@ -129,10 +129,13 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     wire pad_zero=!reflect_pad || (lower_edge && pad_local<-$signed({5'b0,pad_width})) ||
         (upper_edge && pad_local>=$signed({3'b0,extent})+$signed({5'b0,pad_width}));
     wire pad_last=pad_idx==2 && (pad_side || !(pad_axis ? need_bottom : need_right));
-    reg [1:0] align_idx;
-    wire buffer_ready=(state==LOAD_DRAIN && !need_x && !need_y) ||
-        (state==PAD_X && pad_last && !need_y) || (state==PAD_Y && pad_last);
-    wire dw_start=(buffer_ready && origin==0) || (state==ALIGN_Y && align_idx==origin-1'b1);
+    wire window_load_done,window_load_last,window_pad_done,window_init_done;
+    reg pad_pending,final_load_queued;
+    wire window_pad_request=(state==PAD_X || state==PAD_Y) && !pad_pending;
+    wire buffer_ready=(state==LOAD_DRAIN && window_load_done && final_load_queued && !need_x && !need_y) ||
+        (state==PAD_X && window_pad_done && pad_last && !need_y) ||
+        (state==PAD_Y && window_pad_done && pad_last);
+    wire dw_start=state==INIT_WAIT && window_init_done;
     reg [2:0] tap_row,tap_col;
     wire row_end=tap_row[0] ? tap_col==0 : tap_col==kw-1'b1;
     wire tap_last=tap_row==kh-1'b1 && row_end;
@@ -165,9 +168,11 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
                     else begin cache_rd_en=1;if(opcode==`MN_OP_ADD) issue_add=1;else issue_last=channels==1;end
                 end
             end
-            LOAD:begin
-                load_request=1;load_zero=tile_absent;issue_owner=owner;
-                cache_rd_en=!tile_absent;cache_rd_addr=neighbor_addr[10:0];
+            LOAD_DRAIN:begin
+                if(window_load_last && owner!=9) begin
+                    load_request=1;load_zero=tile_absent;issue_owner=owner;
+                    cache_rd_en=!tile_absent;cache_rd_addr=neighbor_addr[10:0];
+                end
             end
             PW_RUN:begin issue_valid=1;issue_last=channel_idx==channels-1'b1;cache_rd_en=1;
                 issue_param=param_base+channel_idx;cache_rd_addr=src_base+channel_idx;end
@@ -209,10 +214,12 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
         end
     end
     wire [799:0] window_pixels,input_tile;
-    mn_dw_buffer windows(.clk(clk),.reset(reset),.load_en(d1_load),.load_zero(d1_zero),.load_owner(d1_owner),.tile(cache_data),
-        .pad_en(state==PAD_X || state==PAD_Y),.pad_axis(pad_axis),.pad_zero(pad_zero),.pad_dst(pad_dst),.pad_src(pad_mapped[3:0]),
-        .rotate_en((d1_valid && d1_source==SRC_WINDOW && !d1_last) || state==ALIGN_X || state==ALIGN_Y),
-        .rotate_dir(state==ALIGN_X ? 2'd0 : state==ALIGN_Y ? 2'd2 : d1_direction),.pixels(window_pixels));
+    mn_dw_buffer_bram windows(.clk(clk),.reset(reset),.load_en(d1_load),.load_zero(d1_zero),.load_owner(d1_owner),.tile(cache_data),
+        .load_done(window_load_done),.load_last(window_load_last),.pad_en(window_pad_request),.pad_axis(pad_axis),.pad_zero(pad_zero),
+        .pad_dst(pad_dst),.pad_src(pad_mapped[3:0]),.pad_done(window_pad_done),
+        .init_start(buffer_ready),.init_x({1'b0,origin}),.init_y({1'b0,origin}),.init_done(window_init_done),
+        .prefetch_en(issue_valid && issue_source==SRC_WINDOW && !issue_last),.prefetch_dir(issue_direction),
+        .rotate_en(d1_valid && d1_source==SRC_WINDOW && !d1_last),.rotate_dir(d1_direction),.pixels(window_pixels));
     mn_input_mux input_mux(.source(d1_source),.window_pixels(window_pixels),
         .cache_data(cache_data),.pixels(input_tile));
     genvar p;
@@ -266,7 +273,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     always @(posedge clk) begin
         if(reset) begin
             state<=IDLE;cmd<=0;done<=0;error_code<=0;acc_live<=0;acc_dst<=0;acc_round<=0;acc_channels<=0;
-            channel_idx<=0;owner<=0;pad_side<=0;pad_idx<=0;tap_row<=0;tap_col<=0;align_idx<=0;
+            channel_idx<=0;owner<=0;pad_side<=0;pad_idx<=0;tap_row<=0;tap_col<=0;pad_pending<=0;final_load_queued<=0;
         end else begin
             done<=0;
             case(state)
@@ -280,34 +287,40 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
                 CLEAR:begin
                     acc_channels<=keep_acc ? acc_channels+terms : terms;if(!keep_acc) acc_live<=0;
                     channel_idx<=rounding && !keep_acc ? 0 : 1;
-                    if(spatial && kernel!=5) begin owner<=0;state<=LOAD;end
+                    if(spatial && kernel!=5) begin owner<=0;pad_pending<=0;final_load_queued<=0;state<=LOAD_DRAIN;end
                     else if(opcode==`MN_OP_NORM) state<=N_X;
                     else if(rounding && !keep_acc) state<=opcode==`MN_OP_ADD ? ADD_FIRST : PW_RUN;
                     else if(opcode==`MN_OP_ADD) state<=ADD_SECOND;
                     else state<=channels==1 ? WAIT_PE : PW_RUN;
                 end
-                LOAD:begin
-                    if(owner==8) state<=LOAD_DRAIN;
-                    else owner<=owner==3 ? 5 : owner+1'b1;
-                end
                 LOAD_DRAIN:begin
-                    if(need_x) begin pad_side<=!need_left;pad_idx<=0;state<=PAD_X;end
-                    else if(need_y) begin pad_side<=!need_top;pad_idx<=0;state<=PAD_Y;end
+                    if(window_load_last) begin
+                        if(owner!=9) owner<=owner==3 ? 5 : owner+1'b1;
+                        else final_load_queued<=1;
+                    end
+                    if(window_load_done && final_load_queued) begin
+                        if(need_x) begin pad_side<=!need_left;pad_idx<=0;state<=PAD_X;end
+                        else if(need_y) begin pad_side<=!need_top;pad_idx<=0;state<=PAD_Y;end
+                        else state<=INIT_WAIT;
+                    end
                 end
                 PAD_X,PAD_Y:begin
-                    if(pad_last) begin
-                        if(state==PAD_X && need_y) begin pad_side<=!need_top;pad_idx<=0;state<=PAD_Y;end
-                    end else if(pad_idx==2) begin pad_idx<=0;pad_side<=1;end
-                    else pad_idx<=pad_idx+1'b1;
+                    if(window_pad_request) pad_pending<=1;
+                    if(window_pad_done) begin
+                        pad_pending<=0;
+                        if(pad_last) begin
+                            if(state==PAD_X && need_y) begin pad_side<=!need_top;pad_idx<=0;state<=PAD_Y;end
+                            else state<=INIT_WAIT;
+                        end else if(pad_idx==2) begin pad_idx<=0;pad_side<=1;end
+                        else pad_idx<=pad_idx+1'b1;
+                    end
                 end
                 DW_RUN:begin
                     if(tap_last) state<=WAIT_PE;
                     else if(row_end) tap_row<=tap_row+1'b1;
                     else tap_col<=tap_row[0] ? tap_col-1'b1 : tap_col+1'b1;
                 end
-                ALIGN_X:if(align_idx==origin-1'b1) begin align_idx<=0;state<=ALIGN_Y;end
-                    else align_idx<=align_idx+1'b1;
-                ALIGN_Y:align_idx<=align_idx+1'b1;
+                INIT_WAIT:;
                 PW_RUN:if(channel_idx==channels-1'b1) state<=WAIT_PE;else channel_idx<=channel_idx+1'b1;
                 N_X,ADD_SECOND:state<=WAIT_PE;
                 ADD_FIRST:state<=ADD_SECOND;
@@ -320,7 +333,6 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
                 COMPLETE:begin done<=1;state<=IDLE;end
                 default:begin error_code<=15;state<=COMPLETE;end
             endcase
-            if(buffer_ready && origin!=0) begin align_idx<=0;state<=ALIGN_X;end
             if(dw_start) begin
                 tap_row<=kw==1 ? 1 : 0;tap_col<=kw==1 ? 0 : 1;state<=DW_RUN;
             end

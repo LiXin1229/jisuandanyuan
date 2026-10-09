@@ -26,7 +26,7 @@ node(device,"device",name="Ti60F225")
 node(device,"timing_model",name="C4")
 design=node(project,"design_info",def_veri_version="sv_09",def_vhdl_version="vhdl_2008",unified_flow="false")
 node(design,"top_module",name=args.top)
-sources=["mn_cache.sv","mn_param_ram.sv","mn_instruction_fifo.sv","mn_dw_buffer.sv","mn_input_mux.sv",
+sources=["mn_cache.sv","mn_param_ram.sv","mn_instruction_fifo.sv","mn_dw_buffer.sv","mn_dw_buffer_bram.sv","mn_input_mux.sv",
          "mn_pe_array.sv","mn_compact.sv","mn_postprocess.sv","mn_model_rom.sv","mn_tanh.sv",
          "mobilenet_unit.sv","mobilenet_bus_top.sv","cyclegan_bus_top.sv"]
 for source in sources:
