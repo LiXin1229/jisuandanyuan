@@ -43,7 +43,7 @@ def pair_check(pair):
  (pair/'comparison.json').write_text(json.dumps(comparison,indent=2)+'\n')
  print('VIDEO_PAIR_NUMERICAL_PASS 230400 RGB bytes; independent scatter and 16 instruction-model tensors',flush=True)
 
-def record(out,pair,confirmation):
+def record(out,pair,confirmation,record_path=None,baseline_path=None):
  project=Path((out/'staging_path.txt').read_text().strip());manifest=json.loads((project/'source_manifest.json').read_text())
  assert all(sha(ROOT/'rtl'/name)==value for name,value in manifest['rtl_sha256'].items())
  assert all(sha(ROOT/'board/video'/name)==value for name,value in manifest['board_sha256'].items())
@@ -59,11 +59,17 @@ def record(out,pair,confirmation):
  resources=json.loads((out/'resources.json').read_text());assert resources['EFX_DSP48']==103 and resources['EFX_RAM10']+resources['EFX_DPRAM10']<=256
  timing=(project/'outflow/encoder_board.timing.rpt').read_text();rows=re.findall(r'^\s*(\w+)\s+(\w+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+\(',timing,re.M)
  assert rows and all(float(row[3])>=0 for row in rows)
+ compute_mhz=manifest['video_contract'].get('compute_mhz',150)
+ clock=re.search(r'^clk_compute\s+([\d.]+)\s+([\d.]+)\s+\{',timing,re.M)
+ # The report rounds periods to 0.001 ns and derives displayed MHz from them.
+ assert clock and abs(float(clock[1])-1000/compute_mhz)<=.0005,'Clock contract differs from routed clock'
  streams=[json.loads((out/name).read_text()) for name in ('stream_style.json','stream_original.json')]
  restored=json.loads((out/'stream_restore.json').read_text())
  assert restored['hardware_stream_pass'] and (restored['final']['control_packed']>>10)&7==0
  bit_sha=sha(project/'outflow/encoder_board.bit')
- for stream in streams:assert stream['hardware_stream_pass'] and stream['bitstream_sha256']==bit_sha
+ for stream in streams:
+  assert stream['hardware_stream_pass'] and stream['bitstream_sha256']==bit_sha
+  assert stream['processing_sample']['compute_mhz']==compute_mhz,'Incorrect frequency in timing measurement'
  capture=json.loads((pair/'capture_report.json').read_text());comparison=json.loads((pair/'comparison.json').read_text())
  assert capture['pass_matched_capture'] and capture['bitstream_sha256']==bit_sha and comparison['mismatches']==0 and comparison['values']==230400
  assert comparison['input_rgbx_sha256']==sha(pair/'camera_original.rgbx') and comparison['fpga_padded_sha256']==sha(pair/'fpga_styled.tiles')
@@ -78,12 +84,26 @@ def record(out,pair,confirmation):
   physical_user_confirmation=confirmation or None,
   measurement='Reference compute RTL unchanged; real video-interface RTL simulations and live same-frame numerical comparison',
   artifacts={'input':str((pair/'camera_original.png').relative_to(ROOT)),'fpga_output':str((pair/'fpga_styled.png').relative_to(ROOT))})
+ if baseline_path:
+  baseline_path=baseline_path.resolve()
+  baseline=json.loads(baseline_path.read_text());previous=baseline['resources']
+  deltas={name:resources[name]-previous[name] for name in resources}
+  assert deltas['EFX_DSP48']==0 and deltas['EFX_RAM10']+deltas['EFX_DPRAM10']==0,'Storage/DSP budget increased'
+  assert deltas['EFX_LUT4']<=64 and deltas['EFX_FF']<=16,'Scheduling control logic budget exceeded'
+  old_rates={x['final']['active_style']:x['rates']['processed_fps'] for x in baseline['live_streams']}
+  result['optimization_baseline']=dict(commit='59a84f0',path=str(baseline_path.relative_to(ROOT)),sha256=sha(baseline_path),
+   resources=previous,resource_delta=deltas,
+   processed_fps={x['final']['active_style']:{'before':old_rates[x['final']['active_style']],
+    'after':x['rates']['processed_fps'],'improvement_percent':100*(x['rates']['processed_fps']/old_rates[x['final']['active_style']]-1)} for x in streams})
+  assert all(x['rates']['processed_fps']>old_rates[x['final']['active_style']] for x in streams),'Frame rate did not improve'
  (out/'verification.json').write_text(json.dumps(result,indent=2)+'\n')
- (ROOT/'docs/analysis/cyclegan_video_deployment.json').write_text(json.dumps(result,indent=2)+'\n')
+ (record_path or ROOT/'docs/analysis/cyclegan_video_fps_optimization.json').write_text(json.dumps(result,indent=2)+'\n')
  print('VIDEO_DEPLOYMENT_PASS',flush=True)
 
 if __name__=='__main__':
  ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--pair',type=Path,required=True);ap.add_argument('--record',action='store_true')
- ap.add_argument('--out',type=Path,default=ROOT/'build/video_verified');ap.add_argument('--physical-confirmation');args=ap.parse_args()
- if args.record:record(args.out.resolve(),args.pair.resolve(),args.physical_confirmation)
+ ap.add_argument('--out',type=Path,default=ROOT/'build/video_verified');ap.add_argument('--physical-confirmation')
+ ap.add_argument('--record-path',type=Path,default=ROOT/'docs/analysis/cyclegan_video_fps_optimization.json')
+ ap.add_argument('--baseline',type=Path,default=ROOT/'docs/analysis/cyclegan_video_deployment.json');args=ap.parse_args()
+ if args.record:record(args.out.resolve(),args.pair.resolve(),args.physical_confirmation,args.record_path,args.baseline)
  else:pair_check(args.pair.resolve())

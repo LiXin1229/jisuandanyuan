@@ -1,7 +1,9 @@
 param([string]$EfinityRoot='D:\Efinity\2026.1',
  [string]$Python='C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe',
  [string]$UsbUrl='ftdi://0x0403:0x6014:3:7/1',[string]$OutputDir='build/video_verified',
- [int]$SecondsPerMode=60,[switch]$ReuseCapture,[string]$PhysicalConfirmation='')
+ [int]$SecondsPerMode=60,[switch]$ReuseCapture,[string]$PhysicalConfirmation='',
+ [string]$RecordPath='docs/analysis/cyclegan_video_fps_optimization.json',
+ [string]$Baseline='docs/analysis/cyclegan_video_deployment.json')
 $ErrorActionPreference='Stop'
 Push-Location (Split-Path -Parent $PSScriptRoot)
 try {
@@ -32,7 +34,8 @@ if($validated) {
  if(!$restoreValid) {throw 'Automatic key control restoration failed; inspect restore.log'}
  Push-Location (Split-Path -Parent $PSScriptRoot)
  try {
-  $extra=@();if($PhysicalConfirmation) {$extra=@('--physical-confirmation',$PhysicalConfirmation)}
+  $extra=@('--record-path',$RecordPath);if($PhysicalConfirmation) {$extra+=@('--physical-confirmation',$PhysicalConfirmation)}
+  if($Baseline) {$extra+=@('--baseline',$Baseline)}
   & $Python tools/verify_video_deployment.py --record --out $OutputDir --pair $pairDir @extra
   if($LASTEXITCODE -ne 0) {throw 'Video deployment evidence gate failed'}
  } finally {Pop-Location}

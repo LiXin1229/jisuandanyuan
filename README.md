@@ -49,3 +49,5 @@ RTL 仿真使用 Icarus Verilog。综合脚本为 Efinity 建立 ASCII 路径副
 板上使用时，当前已有官方 JTAG 上传/回读、DDR 帧缓冲和整网自主调度。执行 `scripts/run_output_board.ps1 -Program -RepeatBoot` 可构建、烧录并验证包含 7×7 输出与 Tanh 的完整生成器；各历史阶段构建脚本保留。复现步骤、统计协议、DDR 特征/输出布局见 [第四阶段部署记录](docs/cyclegan_stage4_deployment.md)。
 
 实时摄像头版本执行 `scripts/run_video_board.ps1 -Program`：SC2210 → BGGR/自动白平衡/Gamma → 320×240 完整网络 → HDMI，实体按键可切换原图与网络结果。运行 `scripts/verify_video_board.ps1` 可进行同帧数值比较和连续视频测试，详见 [实时视频部署记录](docs/cyclegan_video_deployment.md)。
+
+当前实时版本通过提前启动下一帧编码、重叠原图拷贝和 171.43 MHz 计算时钟提高帧率，复用现有 DDR 与缓存。资源和上板对比、独立验证目录的复现命令见 [帧率优化记录](docs/cyclegan_video_fps_optimization.md)。

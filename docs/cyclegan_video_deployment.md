@@ -1,5 +1,7 @@
 # SC2210 实时输入、ISP、CycleGAN 与 HDMI
 
+本页保存 `59a84f0` 的 150 MHz 基线。当前版本的调度、171.43 MHz 配置与最新结果见 [实时帧率优化](cyclegan_video_fps_optimization.md)。
+
 本工程增加独立顶层 `rtl/video/cyclegan_camera_board.sv`，使用现有计算单元运行完整生成器。摄像头、ISP 和显示接口来自只读参考工程 `C:/Users/Administrator/Desktop/jisuan/pe10_10`；网络仍是 `ac1fbbc` 已验证的 Q4.4 激活、Q8.8 参数、固定归一化版本。计算 RTL 的 22 个文件散列与第四阶段一致。
 
 ## 数据链路

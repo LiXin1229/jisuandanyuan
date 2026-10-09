@@ -4,7 +4,7 @@
 // Numerical computation is checked on the board against fresh integer models.
 module tb_video_board;
  reg vclk=0,dclk=0,cclk=0;always #6.720430 vclk=~vclk;
- always #5.208333 dclk=~dclk;always #3.333333 cclk=~cclk;
+ always #5.208333 dclk=~dclk;always #2.916667 cclk=~cclk;
  cyclegan_camera_board #(.SIM_CAMERA(1)) dut(.clk_video(vclk),.clk_video_5x(1'b0),.clk_video_fb(dclk),.video_pll_lock(1'b1),
   .camera_pll_lock(1'b1),.clk_camera_fb(dclk),.clk_27m(dclk),.key_data(2'b11),
   .clk_sys(dclk),.clk_compute(cclk),.sys_pll_lock(1'b1),.core_clk(dclk),.tdqss_clk(dclk),.tac_clk(dclk),.twd_clk(dclk),.ddr_pll_lock(1'b1),
@@ -12,7 +12,14 @@ module tb_video_board;
   .bscan_CAPTURE(1'b0),.bscan_DRCK(1'b0),.bscan_RESET(1'b0),.bscan_RUNTEST(1'b0),.bscan_SEL(1'b0),
   .bscan_SHIFT(1'b0),.bscan_TCK(1'b0),.bscan_TDI(1'b0),.bscan_TMS(1'b0),.bscan_UPDATE(1'b0));
  reg [127:0] image0[0:19199],image1[0:19199];reg [799:0] gold0[0:2303],gold1[0:2303];
- integer checks=0;
+ integer checks=0,overlapped_starts=0;
+ always @(posedge dclk) if(dut.drstn) begin
+  if(dut.schedule_start && dut.ready_toggle!=dut.frame_ack_toggle) overlapped_starts=overlapped_starts+1;
+  if(dut.copy_start && dut.ready_toggle!=dut.frame_ack_toggle)
+   $fatal(1,"Copy overwrote a display-owned original bank");
+ end
+ always @(posedge cclk) if(dut.crstn && dut.u_output.s_valid && dut.feature_write_addr[31:20]==12'h006 && !dut.output_bank_ready)
+  $fatal(1,"Final write reached a display-owned output bank");
  task inject(input integer variant);
   integer p;reg [31:0] pixel;
   begin
@@ -61,13 +68,20 @@ module tb_video_board;
   inject(0);wait(dut.core_busy);inject(1);
   // Both input slots are owned: the complete third camera frame is dropped.
   inject(0);
-  wait(dut.core_done);@(negedge cclk);check_frame(0);
-  wait(!dut.core_done);wait(dut.core_done);@(negedge cclk);check_frame(1);
+  wait(dut.core_done);force dut.frame_ack_toggle=0;@(negedge cclk);check_frame(0);
+  // Delay acknowledgement beyond the next network's final-output request.
+  // Its input reads may proceed, but neither copy nor final write may proceed.
+  wait(!dut.core_done);wait(dut.feature_write_valid && !dut.bank_ready_c2);
+  repeat(100) @(negedge cclk);
+  if(dut.feature_write_ready || dut.u_output.s_valid || dut.copy_busy || dut.frames!=1)
+   $fatal(1,"Delayed VSYNC ownership did not backpressure final output");
+  release dut.frame_ack_toggle;
+  wait(dut.core_done);@(negedge cclk);check_frame(1);
   dut.control=4;wait(!dut.running);wait(dut.active_slot==1 && dut.frame_ack_toggle==dut.ready_toggle);
   repeat(100) @(negedge dclk);
-  if(dut.frames!=2 || dut.captured_frames!=2 || dut.dropped_frames!=1 || checks!=460800 || dut.slots!=0)
+  if(dut.frames!=2 || dut.captured_frames!=2 || dut.dropped_frames!=1 || checks!=460800 || dut.slots!=0 || overlapped_starts==0)
    $fatal(1,"Capture lifecycle frames=%0d captured=%0d dropped=%0d slots=%h",dut.frames,dut.captured_frames,dut.dropped_frames,dut.slots);
-  $display("PASS camera board protocol: simulated network source with complete input checks, 460800 exact output RGB bytes, real CDC/writer/capture/copy/DDR arbiters, alternate output banks, final-B publication, full-frame drop, HDMI VSYNC acknowledgement, no faults/underflow");$finish;
+  $display("PASS camera board protocol: 460800 exact output RGB bytes, complete input/copy checks, real CDC/writer/DDR arbiters, encoder starts before prior VSYNC ack, final writes gated by output ownership, full-frame drop, no faults/underflow");$finish;
  end
  initial begin #180000000;$fatal(1,"Video integration timeout state=%0d frames=%0d",dut.u_schedule.state,dut.frames);end
 endmodule

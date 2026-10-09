@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-// Ti60 DDR + 200MHz encoder + official Efinity JTAG VIO.
+// Ti60 DDR + shared CycleGAN compute core + official Efinity JTAG VIO.
 // command[31]=toggle, [30:28]=1 frame begin,2 data64,3 run,4 cache read,5 clear,6 DDR read64.
 module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
  input wire clk_video,clk_video_5x,clk_video_fb,video_pll_lock,
@@ -132,7 +132,7 @@ module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
  wire cp_awvalid,cp_awready,cp_wvalid,cp_wready,cp_wlast,cp_bvalid,cp_bready;
  wire cp_arvalid,cp_arready,cp_rvalid,cp_rready,cp_rlast;
  wire [31:0] cp_awaddr,cp_araddr;wire [7:0] cp_awlen,cp_arlen;wire [127:0] cp_wdata,cp_rdata;
- wire copy_start,copy_done,copy_busy,copy_fault;wire [31:0] copy_destination,styled_write_base,total_cycles;
+ wire copy_start,copy_done,copy_busy,copy_fault,output_bank_ready;wire [31:0] copy_destination,styled_write_base,total_cycles;
  reg [31:0] copy_cycles=0;
  always @(posedge clk_sys) if(!drstn || copy_start) copy_cycles<=0;else if(copy_busy) copy_cycles<=copy_cycles+1;
  camera_frame_copy u_copy(.clk(clk_sys),.rstn(drstn),.start(copy_start),.source_base(read_base),.destination_base(copy_destination),
@@ -172,7 +172,7 @@ module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
   .copy_start(copy_start),.copy_done(copy_done),.copy_destination(copy_destination),
   .core_start(schedule_start),.core_done(completed_event),.running(running),.processed_frames(frames),
   .ready_toggle(ready_toggle),.ready_slot(ready_slot),.frame_ack_toggle(frame_ack_toggle),
-  .styled_write_base(styled_write_base),.total_cycles(total_cycles));
+  .styled_write_base(styled_write_base),.output_bank_ready(output_bank_ready),.total_cycles(total_cycles));
  wire [3:0] blocks_completed;wire [10:0] residual_output_base;
  wire [31:0] encoder_cycles,residual_cycles,block_cycles,decode_cycles,layer_cycles,output_cycles;
  wire [31:0] command_wait_cycles,data_wait_cycles,input_checksum;
@@ -180,12 +180,19 @@ module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
  wire [31:0] progress={12'd0,residual_output_base,blocks_completed,4'd0,1'b0};
  wire core_busy,core_done,core_fault,network_fault,writer_fault;
  assign core_state={1'b0,output_completed,core_busy};assign writer_diag=0;assign bridge_diag=0;
- wire feature_write_valid,feature_write_ready;wire [31:0] feature_write_addr;wire [399:0] feature_write_data;
+ wire feature_write_valid,feature_write_ready,writer_ready;wire [31:0] feature_write_addr;wire [399:0] feature_write_data;
+ // Backpressure only final outputs until the paired original copy is complete.
+ // Encoder/residual work and intermediate feature writes can overlap VSYNC.
+ reg bank_ready_c1=0,bank_ready_c2=0;
+ always @(posedge clk_compute) if(!crstn) begin bank_ready_c1<=0;bank_ready_c2<=0;end
+ else begin bank_ready_c1<=output_bank_ready;bank_ready_c2<=bank_ready_c1;end
+ wire output_write_allowed=feature_write_addr[31:20]!=12'h006 || bank_ready_c2;
+ assign feature_write_ready=writer_ready && output_write_allowed;
  // Workspaces 3/4/5 MiB are fixed; only final output maps to the free display bank.
  wire [31:0] output_address=feature_write_addr[31:20]==12'h006 ?
     {styled_write_base[31:20],feature_write_addr[19:0]} : feature_write_addr;
  assign core_fault=network_fault || writer_fault || copy_fault;
- cyclegan_feature_writer u_output(.cclk(clk_compute),.crstn(crstn),.s_valid(feature_write_valid),.s_ready(feature_write_ready),
+ cyclegan_feature_writer u_output(.cclk(clk_compute),.crstn(crstn),.s_valid(feature_write_valid && output_write_allowed),.s_ready(writer_ready),
   .s_addr(output_address),.s_data(feature_write_data),.fault(writer_fault),.dclk(clk_sys),.drstn(drstn),.enable(enable),
   .awvalid(t_awvalid),.awready(t_awready),.awaddr(t_awaddr),.awlen(t_awlen),
   .wvalid(t_wvalid),.wready(t_wready),.wdata(t_wdata),.wlast(t_wlast),.bvalid(t_bvalid),.bresp(bresp),.bready(t_bready));

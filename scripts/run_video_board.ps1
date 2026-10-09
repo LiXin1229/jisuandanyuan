@@ -45,5 +45,6 @@ try {
   $lines=@(& (Join-Path $EfinityRoot 'pgm/bin/ftdi_pgm.bat') -m jtag -b 'Generic Board Profile Using FT232H' -u $UsbUrl -a $UsbUrl (Join-Path $videoStage 'outflow/encoder_board.bit') 2>&1)
   $programExit=$LASTEXITCODE;$lines | Tee-Object -FilePath "$OutputDir/program.log"
   if($programExit -ne 0 -or ($lines -join "`n") -notmatch 'finished with JTAG programming' -or ($lines -join "`n") -notmatch '0x10660A79') {throw 'Ti60 programming failed'}
+  Set-Content -LiteralPath 'build/video_active_stage.txt' -Value $videoStage
  }
 } finally {Pop-Location}

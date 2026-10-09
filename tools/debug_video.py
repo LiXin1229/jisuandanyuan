@@ -3,7 +3,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 import argparse, hashlib, json, os, sys, time
 ROOT=Path(__file__).resolve().parents[1]
-_project_file=ROOT/'build/video_verified/staging_path.txt'
+_project_file=ROOT/'build/video_active_stage.txt'
+if not _project_file.exists():_project_file=ROOT/'build/video_verified/staging_path.txt'
 PROJECT=Path(_project_file.read_text().strip()) if _project_file.exists() else ROOT/'build/video_verified'
 os.environ.setdefault('EFINITY_USER_DIR',str(PROJECT/'vendor_user'))
 sys.path.insert(0,str(Path(os.environ['EFINITY_HOME'])/'debugger/bin'))
@@ -13,6 +14,10 @@ from pyftdi.bits import BitSequence
 
 class VideoBoard:
  def __init__(self,url,freq=3e6,profile_path=None):
+  project=Path(profile_path).parent if profile_path else PROJECT
+  manifest_path=project/'source_manifest.json'
+  manifest=json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+  self.compute_mhz=manifest.get('video_contract',{}).get('compute_mhz',150)
   self.manager=JtagManager()
   self.jtag=self.manager.config_jtag(url=url,tap='efx_ti',user='USER1',freq=freq)
   p,_=DebugProfileBuilder.from_file(str(profile_path or PROJECT/'debug_profile.json'))
@@ -56,7 +61,8 @@ class VideoBoard:
   s['bus']={name:bool(bus>>shift&1) for name,shift in [
    ('arvalid',10),('arready',9),('rvalid',8),('rready',7),('rlast',6),('awvalid',5),('awready',4),
    ('wvalid',3),('wready',2),('bvalid',1),('bready',0),('capture_active',11),('video_active',12)]}
-  s['compute_ms']=s['cycles']/150000
+  s['compute_mhz']=self.compute_mhz
+  s['compute_ms']=s['cycles']/(self.compute_mhz*1000)
   s['display_scale']=2 if self.signature==0xe316 else 3
   s['camera_roi']=[640,480] if self.signature==0xe316 else [320,240]
   if self.signature==0xe316:
