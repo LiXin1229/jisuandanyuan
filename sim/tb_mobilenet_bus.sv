@@ -68,7 +68,7 @@ module tb_mobilenet_bus;
                 $signed(expected[i*8+:8]),$signed(actual[i*8+:8]));
 `ifndef MN_POSTMAP
             $display("param0=%0d dst=%0d first accumulator=%0d",
-                dut.unit.parameter_buffer[15:0],dut.unit.dst_base,$signed(dut.unit.pe_data[31:0]));
+                dut.unit.param_data,dut.unit.dst_base,$signed(dut.unit.pe_data[31:0]));
             $display("pe50=%h in50=%h q50=%h snapshot50=%h",
                 dut.unit.pe_data[50*32+:32],dut.unit.input_tile[50*8+:8],
                 dut.unit.qdata[50*8+:8],dut.tile_staging[50*8+:8]);

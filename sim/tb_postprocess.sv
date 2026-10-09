@@ -73,10 +73,10 @@ module tb_postprocess;
             valid_w=10;valid_h=10;
         end
         // Reset during a partial group scan must suppress both output valids.
-        in_valid=1;@(negedge clk);in_valid=0;repeat(7) @(negedge clk);
+        in_valid=1;@(negedge clk);in_valid=0;repeat(2) @(negedge clk);
         reset=1;@(negedge clk);reset=0;repeat(30) @(negedge clk);
         if(tile_valid || pool_valid) $fatal(1,"Canceled postprocess completed");
-        $display("PASS serial postprocess: %0d pixels, signed16 exhaustive, signed32 extremes, partial pooling and reset",checks);
+        $display("PASS grouped postprocess: %0d pixels, signed16 exhaustive, signed32 extremes, partial pooling and reset",checks);
         $finish;
     end
 endmodule

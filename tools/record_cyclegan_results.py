@@ -27,6 +27,8 @@ def main():
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument('--unit-log', default='build/sim/unit.log')
     cli.add_argument('--bus-log', default='build/sim/bus.log')
+    cli.add_argument('--output', type=Path, default=ROOT/'docs/analysis/cyclegan_iteration1_results.json')
+    cli.add_argument('--baseline', default='820a5df')
     args = cli.parse_args()
     reports = ROOT/'build/efinity/outflow'
     mapping = (reports/'mobilenet.map.rpt').read_text()
@@ -48,8 +50,10 @@ def main():
         'model_assets_rtl': passed('build/sim/assets.log', r'PASS assets:[^\r\n]+'),
         'model_bus_rtl': passed('build/sim/model_bus.log', r'PASS epoch11 bus:[^\r\n]+'),
         'model_bus_mapped': passed('build/sim/model_postmap.log', r'PASS epoch11 bus:[^\r\n]+'),
-        'postprocess_rtl': passed('build/sim/postprocess.log', r'PASS serial postprocess:[^\r\n]+'),
+        'postprocess_rtl': passed('build/sim/postprocess.log', r'PASS (?:serial|grouped) postprocess:[^\r\n]+'),
     }
+    if (ROOT/'build/sim/dsp_quant_probe.log').exists():
+        tests['dsp_primitive_probe'] = passed('build/sim/dsp_quant_probe.log', r'PASS W feedback:[^\r\n]+')
     cases, count, cycles = [int(x) for x in re.findall(r'\d+', tests['core_rtl']['summary'])]
     assert len(commands) == count and max(int(x['case']) for x in commands) == cases
     tests['core_rtl'].update(cases=cases, commands=count, cycles=cycles,
@@ -65,7 +69,7 @@ def main():
     files = sorted((ROOT/'rtl').glob('*.sv')) + [ROOT/'rtl/mn_isa.vh',
              ROOT/'rtl/mn_model_params_init.vh', ROOT/'rtl/mn_tanh_u8.mem']
     result = {'recorded_utc': datetime.now(timezone.utc).isoformat(),
-              'baseline_git_commit': '820a5df', 'top': 'cyclegan_bus_top',
+              'baseline_git_commit': args.baseline, 'top': 'cyclegan_bus_top',
               'device': 'Ti60F225', 'efinity': '2026.1.132', 'timing_model': 'C4',
               'synthesis_resources': resource,
               'internal_timing': {'target_mhz': 100, 'setup_slack_ns': setup,
@@ -80,7 +84,7 @@ def main():
               'report_sha256': {p.name: sha(p) for p in [reports/'mobilenet.map.rpt',
                                                        reports/'mobilenet.timing.rpt',
                                                        reports/'mobilenet.place.rpt']}}
-    target = ROOT/'docs/analysis/cyclegan_iteration1_results.json'
+    target = args.output
     target.write_text(json.dumps(result, indent=2)+'\n', encoding='utf-8')
     print('RESULTS_RECORDED', cases, 'cases,', count, 'commands,', resource['BRAM_total'], 'BRAM')
 

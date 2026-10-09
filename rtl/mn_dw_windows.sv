@@ -3,7 +3,9 @@
 module mn_dw_windows (
     input wire clk,reset,
     input wire load_en,
-    input wire [7:0] load_addr,load_data,
+    input wire [7:0] load_addr,
+    input wire [15:0] load_data,
+    input wire [1:0] load_mask,
     input wire start,
     input wire [2:0] kh,kw,ay,ax,
     input wire [1:0] pad_kind,pad_width,
@@ -20,7 +22,8 @@ module mn_dw_windows (
     reg [5:0] tap_number;
     reg [3:0] captured;
     reg [799:0] window_buffer;
-    wire read_shadow=state==B_PRIME || state==B_STREAM && captured<9;
+    wire center=tap_r==ay && tap_c==ax;
+    wire read_shadow=state==B_PRIME && !center || state==B_STREAM && captured<9;
     wire [3:0] issue_row=state==B_PRIME ? 4'd0 : captured+1'b1;
     wire signed [6:0] y=$signed({3'b0,issue_row})+$signed({4'b0,tap_r})-$signed({4'b0,ay});
     function automatic signed [6:0] reflect_coordinate;
@@ -67,9 +70,9 @@ module mn_dw_windows (
         wire [7:0] data;
         always @(posedge clk) if(read_shadow)
             zero_pipe[c]<=(x_out || y_out) && (pad_kind!=2 || !x_in_pad || !y_in_pad);
-        EFX_RAM10 #(.READ_WIDTH(8),.WRITE_WIDTH(8),.OUTPUT_REG(0)) shadow (
-            .WCLK(clk),.WE({2{load_en}}),.WCLKE(1'b1),.WADDREN(load_en),
-            .WDATA(load_data),.WADDR({2'b0,load_addr}),
+        EFX_RAM10 #(.READ_WIDTH(8),.WRITE_WIDTH(16),.OUTPUT_REG(0)) shadow (
+            .WCLK(clk),.WE(load_mask&{2{load_en}}),.WCLKE(1'b1),.WADDREN(load_en),
+            .WDATA(load_data),.WADDR({2'b0,load_addr[7:1]}),
             .RCLK(clk),.RE(read_shadow),.RST(reset),.RADDREN(read_shadow),
             .RDATA(data),.RADDR({2'b0,addr}));
         assign row_pixels[c*8+:8]=zero_pipe[c] ? 8'd0 : data;
@@ -88,7 +91,18 @@ module mn_dw_windows (
         if(reset) begin state<=B_IDLE;tap_r<=0;tap_c<=0;tap_number<=0;captured<=0;end
         else case(state)
             B_IDLE:if(start) begin tap_r<=0;tap_c<=0;tap_number<=0;state<=B_PRIME;end
-            B_PRIME:begin captured<=0;state<=B_STREAM;end
+            B_PRIME:begin
+                // The anchor was already accumulated from the original tile.
+                // Advance its number without generating/storing that window.
+                if(center) begin
+                    if(tap_r==kh-1'b1 && tap_c==kw-1'b1) state<=B_DONE;
+                    else begin
+                        if(tap_c==kw-1'b1) begin tap_c<=0;tap_r<=tap_r+1'b1;end
+                        else tap_c<=tap_c+1'b1;
+                        tap_number<=tap_number+1'b1;
+                    end
+                end else begin captured<=0;state<=B_STREAM;end
+            end
             B_STREAM:begin
                 window_buffer<={row_pixels,window_buffer[799:80]};
                 if(captured==9) state<=B_STORE;

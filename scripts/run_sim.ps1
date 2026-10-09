@@ -8,6 +8,10 @@ try {
     New-Item -ItemType Directory -Force -Path build/sim | Out-Null
     & $Python sim/prepare_models.py
     if ($LASTEXITCODE -ne 0) { throw 'Simulation model preparation failed' }
+    & iverilog -g2012 -s tb_dsp_quant_probe -o build/sim/dsp_quant_probe.vvp sim/tb_dsp_quant_probe.sv build/sim/efx_dsp48_compat.sv
+    if ($LASTEXITCODE -ne 0) { throw 'DSP probe compilation failed' }
+    & vvp -i build/sim/dsp_quant_probe.vvp | Tee-Object -FilePath build/sim/dsp_quant_probe.log
+    if ($LASTEXITCODE -ne 0) { throw 'DSP feasibility probe failed' }
     & iverilog -g2012 -s tb_postprocess -I rtl -o build/sim/postprocess.vvp sim/tb_postprocess.sv rtl/mn_postprocess.sv
     if ($LASTEXITCODE -ne 0) { throw 'Postprocess compilation failed' }
     & vvp -i build/sim/postprocess.vvp | Tee-Object -FilePath build/sim/postprocess.log

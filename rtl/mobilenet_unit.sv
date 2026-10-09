@@ -21,11 +21,10 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     output reg done,
     output reg [3:0] error_code
 );
-    localparam IDLE=0, CHECK=1, CLEAR=2, ROUND=3, PW_RUN=4,
-        N_BIAS=5, N_X=6, DW_CENTER=7, DW_RET=8, DW_LOAD=9,
+    localparam IDLE=0, CHECK=1, CLEAR=2, PW_RUN=4,
+        N_X=6, DW_CENTER=7, DW_RET=8, DW_LOAD=9,
         DW_SET=10, BUILD_START=11, BUILD_WAIT=12,
-        DW_TAPS=15, WAIT_PE=18,
-        WAIT_POST=19, WRITE=20, COMPLETE=21,WAIT_TANH=22,ADD_FIRST=23,ADD_SECOND=24;
+        WAIT_PE=18, WAIT_POST=19, COMPLETE=21,WAIT_TANH=22,ADD_FIRST=23,ADD_SECOND=24;
     localparam SRC_WINDOW=0, SRC_CACHE=1, SRC_BIAS=2, SRC_ROUND=3;
     reg [4:0] state;
     reg [127:0] cmd;
@@ -86,12 +85,6 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     reg [3:0] hrow,hcol;
     reg [3:0] row_start,col_start,row_end,col_end;
     reg missing_tile;
-    reg [2:0] tap_row,tap_col;
-    wire center_position=tap_row==ay && tap_col==ax;
-    wire last_position=tap_row==kh-1'b1 && tap_col==kw-1'b1;
-    wire [5:0] tap_offset=kernel==4 ? ({3'b0,tap_row}<<3)-tap_row+tap_col :
-        kernel==3 ? ({3'b0,tap_row}<<1)+tap_row+tap_col :
-        kernel==2 ? ({3'b0,tap_row}<<1)+tap_col : kernel==1 ? {3'b0,tap_row} : {3'b0,tap_col};
     always @* begin
         case(owner)
             0:begin owner_row=0;owner_col=0;end
@@ -162,6 +155,12 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     wire [3:0] local_c=owner_col==0 ? hcol+4'd7 :
         owner_col==1 ? hcol-4'd3 : hcol-4'd13;
     wire [6:0] load_pixel=packed_pixel(local_r,local_c);
+    wire signed [6:0] load_x_next=load_x+7'sd1;
+    wire load_outside_next=(edges[0] && load_x_next<0) ||
+        (edges[1] && load_x_next>=$signed({3'b000,valid_w})) ||
+        (edges[2] && load_y<0) || (edges[3] && load_y>=$signed({3'b000,valid_h}));
+    wire [1:0] halo_load_mask=hcol[0] ? 2'b10 : hcol<col_end ? 2'b11 : 2'b01;
+    wire load_row_last=hcol==col_end || (!hcol[0] && hcol+4'd1==col_end);
 
     reg issue_valid,issue_last,issue_bias,issue_const,issue_add;
     reg [1:0] issue_source;
@@ -176,15 +175,25 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
         cache_rd_en=0;
         cache_rd_addr=src_base;
         case(state)
-            ROUND:begin issue_valid=1;issue_source=SRC_ROUND;issue_const=1;end
+            CLEAR:begin
+                // The BRAM request overlaps DSP clear. Its response reaches
+                // DSP A/B on the following edge, after clear is released.
+                issue_valid=1;
+                if(opcode==`MN_OP_NORM) begin
+                    issue_source=SRC_BIAS;issue_bias=1;issue_param=param_base+15'd1;
+                end else if(rounding && !keep_acc) begin
+                    issue_source=SRC_ROUND;issue_const=1;
+                end else begin
+                    issue_source=SRC_CACHE;cache_rd_en=1;
+                    if(opcode==`MN_OP_ADD) issue_add=1;
+                    else if(spatial && kernel!=5) issue_param=param_base+center_tap;
+                    else issue_last=channels==1;
+                end
+            end
             PW_RUN:begin
                 issue_valid=1;issue_last=channel_idx==channels-1'b1;
                 issue_source=SRC_CACHE;issue_param=param_base+channel_idx;
                 cache_rd_en=1;cache_rd_addr=src_base+channel_idx;
-            end
-            N_BIAS:begin
-                issue_valid=1;issue_source=SRC_BIAS;issue_bias=1;
-                issue_param=param_base+15'd1;
             end
             N_X:begin
                 issue_valid=1;issue_last=1;issue_source=SRC_CACHE;
@@ -199,12 +208,14 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
                 cache_rd_en=!tile_absent && neighbor_ok;
                 cache_rd_addr=neighbor_addr[10:0];
             end
-            DW_TAPS:begin
-                issue_valid=!center_position;issue_last=last_position;
-                issue_param=param_base+tap_offset;
+            BUILD_WAIT:if(window_return_valid) begin
+                // Read only after the store edge; never read/write the same
+                // SDP address together. Window generation and MAC overlap.
+                issue_valid=1;issue_last=window_return_tap==kernel_area-1'b1;
+                issue_param=param_base+window_return_tap;
                 issue_source=SRC_CACHE;
-                cache_rd_en=!center_position;
-                cache_rd_addr=WINDOW_BASE+tap_offset;
+                cache_rd_en=1;
+                cache_rd_addr=WINDOW_BASE+window_return_tap;
             end
             ADD_FIRST:begin
                 issue_valid=1;issue_source=SRC_CACHE;issue_add=1;
@@ -237,64 +248,73 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     wire [799:0] window_store_data;
     wire window_store_valid;
     wire [5:0] window_store_tap;
+    reg window_return_valid;
+    reg [5:0] window_return_tap;
+    always @(posedge clk) begin
+        if(reset) begin window_return_valid<=0;window_return_tap<=0;end
+        else begin
+            window_return_valid<=window_store_valid;
+            if(window_store_valid) window_return_tap<=window_store_tap;
+        end
+    end
     wire windows_done;
-    wire [7:0] halo_load_data=missing_tile || load_outside ? 8'd0 : cache_data[load_pixel*8+:8];
+    // Valid pairs never cross a 5-pixel quadrant boundary: center columns
+    // are 0(single),1/2,3/4,5/6,7/8,9(single). One adjacent-byte selector
+    // therefore supplies both pixels without a second address decoder.
+    wire [15:0] halo_pair=cache_data[load_pixel*8+:16];
+    wire [7:0] halo_pixel=missing_tile || load_outside ? 8'd0 : halo_pair[7:0];
+    wire [7:0] halo_pixel_next=missing_tile || load_outside_next ? 8'd0 : halo_pair[15:8];
+    wire [15:0] halo_load_data=hcol[0] ? {halo_pixel,8'd0} : {halo_pixel_next,halo_pixel};
     mn_dw_windows dw_windows(.clk(clk),.reset(reset),.load_en(state==DW_LOAD),
-        .load_addr({hrow,hcol}),.load_data(halo_load_data),.start(state==BUILD_START),
+        .load_addr({hrow,hcol}),.load_data(halo_load_data),.load_mask(halo_load_mask),.start(state==BUILD_START),
         .kh(kh),.kw(kw),.ay(ay),.ax(ax),.pad_kind(pad_kind),.pad_width(pad_width),
         .edges(edges),.valid_w(valid_w),.valid_h(valid_h),.build_done(windows_done),
         .store_valid(window_store_valid),.store_ready(1'b1),
         .store_tap(window_store_tap),.store_data(window_store_data));
 
-    reg [799:0] input_tile;
-    reg [31:0] parameter_buffer;
-    reg d1_valid,d2_valid,d1_last,d2_last;
+    wire [799:0] input_tile;
+    reg d1_valid,d1_last;
     reg [1:0] d1_source;
-    reg d1_bias,d2_bias,d1_const,d2_const,d1_add,d2_add;
+    reg d1_bias,d1_const,d1_add;
     genvar p;
     generate for(p=0;p<100;p=p+1) begin: input_pixels
         localparam R=p/10,C=p%10;
         localparam PACK=((R/5)*2+C/5)*25+(R%5)*5+C%5;
-        always @(posedge clk) begin
-            if(d1_valid) case(d1_source)
-                SRC_CACHE:input_tile[p*8+:8]<=cache_data[PACK*8+:8];
-                SRC_BIAS:input_tile[p*8+:8]<=8'd16;
-                default:input_tile[p*8+:8]<=8'd1;
-            endcase
-        end
+        assign input_tile[p*8+:8]=d1_source==SRC_CACHE ? cache_data[PACK*8+:8] :
+            d1_source==SRC_BIAS ? 8'd16 : 8'd1;
     end endgenerate
     always @(posedge clk) begin
         if(reset) begin
-            d1_valid<=0;d2_valid<=0;d1_last<=0;d2_last<=0;
-            d1_source<=0;d1_bias<=0;d2_bias<=0;d1_const<=0;d2_const<=0;d1_add<=0;d2_add<=0;
-            parameter_buffer<=0;
+            d1_valid<=0;d1_last<=0;
+            d1_source<=0;d1_bias<=0;d1_const<=0;d1_add<=0;
         end else begin
-            d1_valid<=issue_valid;d2_valid<=d1_valid;
-            d1_last<=issue_valid && issue_last;d2_last<=d1_last;
+            d1_valid<=issue_valid;
+            d1_last<=issue_valid && issue_last;
             d1_source<=issue_source;
-            d1_bias<=issue_bias;d2_bias<=d1_bias;
-            d1_const<=issue_const;d2_const<=d1_const;
-            d1_add<=issue_add;d2_add<=d1_add;
-            if(param_valid) parameter_buffer<={parameter_buffer[15:0],param_data};
+            d1_bias<=issue_bias;
+            d1_const<=issue_const;
+            d1_add<=issue_add;
         end
     end
-    wire signed [17:0] pe_weight=d2_add ? 18'sd256 : d2_const ? 18'sd128 :
-        $signed({{2{parameter_buffer[15]}},parameter_buffer[15:0]})+
-        (d2_bias && rounding ? 18'sd8 : 18'sd0);
+    wire signed [17:0] pe_weight=d1_add ? 18'sd256 : d1_const ? 18'sd128 :
+        $signed({{2{param_data[15]}},param_data})+
+        (d1_bias && rounding ? 18'sd8 : 18'sd0);
     wire pe_clear=state==CLEAR && !keep_acc;
     wire [3199:0] pe_data;
     wire pe_valid,pe_last;
     mn_pe_array pes(.clk(clk),.reset(reset),.clear(pe_clear),
-        .in_valid(d2_valid),.in_last(d2_last),.in_data(input_tile),
+        .in_valid(d1_valid),.in_last(d1_last),.in_data(input_tile),
         .weight(pe_weight),.out_data(pe_data),.out_valid(pe_valid),.out_last(pe_last));
     wire qvalid,pvalid;
     wire [799:0] qdata;
     wire [199:0] pdata;
     wire tanh_valid;
     wire [799:0] tanh_data;
+    wire result_write=(state==WAIT_POST && (pool_enable ? pvalid : qvalid)) ||
+        (state==WAIT_TANH && tanh_valid);
     mn_tanh_tile tanh_post(.clk(clk),.rstn(!reset),
         .start(state==WAIT_PE && pe_valid && pe_last && !more_acc && tanh_enable),
-        .in_data(pe_data),.busy(),.valid(tanh_valid),.ready(state==WRITE),.data(tanh_data));
+        .in_data(pe_data),.busy(),.valid(tanh_valid),.ready(result_write),.data(tanh_data));
     mn_postprocess post(.clk(clk),.reset(reset),
         .in_valid(state==WAIT_PE && pe_valid && pe_last && !more_acc && !tanh_enable),
         .in_data(pe_data),.activation(activation),.valid_w(valid_w),.valid_h(valid_h),
@@ -318,7 +338,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     end
     wire [799:0] result_data=tanh_enable ? tanh_data : pool_enable ? {4{pdata}} : stride2 ? {4{sampled}} : qdata;
     mn_cache cache(.clk(clk),.reset(reset),
-        .wr_en(state==WRITE || window_store_valid),
+        .wr_en(result_write || window_store_valid),
         .wr_addr(window_store_valid ? WINDOW_BASE+window_store_tap : dst_base),
         .wr_data(window_store_valid ? window_store_data : result_data),
         .wr_quadrants(window_store_valid ? 4'b1111 : result_mask),
@@ -352,7 +372,6 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
             state<=IDLE;cmd<=0;done<=0;error_code<=0;
             acc_live<=0;acc_dst<=0;acc_round<=0;acc_channels<=0;channel_idx<=0;
             owner<=4;hrow<=3;hcol<=3;missing_tile<=0;
-            tap_row<=0;tap_col<=0;
         end else begin
             done<=0;
             case(state)
@@ -364,21 +383,20 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
                     else state<=CLEAR;
                 end
                 CLEAR:begin
-                    channel_idx<=0;
+                    channel_idx<=rounding && !keep_acc ? 0 : 1;
                     acc_channels<=keep_acc ? acc_channels+terms : terms;
                     if(!keep_acc) acc_live<=0;
-                    if(opcode==`MN_OP_NORM) state<=N_BIAS;
-                    else if(rounding && !keep_acc) state<=ROUND;
-                    else if(opcode==`MN_OP_ADD) state<=ADD_FIRST;
-                    else if(spatial && kernel!=5) state<=DW_CENTER;
-                    else state<=PW_RUN;
+                    if(opcode==`MN_OP_NORM) state<=N_X;
+                    else if(rounding && !keep_acc) state<=opcode==`MN_OP_ADD ? ADD_FIRST :
+                        spatial && kernel!=5 ? DW_CENTER : PW_RUN;
+                    else if(opcode==`MN_OP_ADD) state<=ADD_SECOND;
+                    else if(spatial && kernel!=5) begin owner<=4;missing_tile<=0;state<=DW_RET;end
+                    else state<=channels==1 ? WAIT_PE : PW_RUN;
                 end
-                ROUND:state<=opcode==`MN_OP_ADD ? ADD_FIRST : spatial && kernel!=5 ? DW_CENTER : PW_RUN;
                 PW_RUN:begin
                     if(channel_idx==channels-1'b1) state<=WAIT_PE;
                     else channel_idx<=channel_idx+1'b1;
                 end
-                N_BIAS:state<=N_X;
                 N_X:state<=WAIT_PE;
                 ADD_FIRST:state<=ADD_SECOND;
                 ADD_SECOND:state<=WAIT_PE;
@@ -389,7 +407,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
                 end
                 DW_RET:begin hrow<=row_start;hcol<=col_start;state<=DW_LOAD;end
                 DW_LOAD:begin
-                    if(hcol!=col_end) hcol<=hcol+1'b1;
+                    if(!load_row_last) hcol<=hcol+(hcol[0] ? 4'd1 : 4'd2);
                     else if(hrow!=row_end) begin hcol<=col_start;hrow<=hrow+1'b1;end
                     else if(owner==8) state<=BUILD_START;
                     else begin
@@ -402,20 +420,14 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
                     end
                 end
                 BUILD_START:state<=BUILD_WAIT;
-                BUILD_WAIT:if(windows_done) begin tap_row<=0;tap_col<=0;state<=DW_TAPS;end
-                DW_TAPS:begin
-                    if(last_position) state<=WAIT_PE;
-                    else if(tap_col<kw-1'b1) tap_col<=tap_col+1'b1;
-                    else begin tap_row<=tap_row+1'b1;tap_col<=0;end
-                end
+                BUILD_WAIT:if(windows_done) state<=WAIT_PE;
                 WAIT_PE:if(pe_valid && pe_last) begin
                     if(more_acc) begin
                         acc_live<=1;acc_dst<=dst_base;acc_round<=rounding;state<=COMPLETE;
                     end else begin acc_live<=0;state<=tanh_enable ? WAIT_TANH : WAIT_POST;end
                 end
-                WAIT_POST:if(pool_enable ? pvalid : qvalid) state<=WRITE;
-                WAIT_TANH:if(tanh_valid) state<=WRITE;
-                WRITE:state<=COMPLETE;
+                WAIT_POST:if(pool_enable ? pvalid : qvalid) state<=COMPLETE;
+                WAIT_TANH:if(tanh_valid) state<=COMPLETE;
                 COMPLETE:begin done<=1;state<=IDLE;end
                 default:begin error_code<=15;state<=COMPLETE;end
             endcase

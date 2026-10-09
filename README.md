@@ -2,9 +2,11 @@
 
 目标器件 Ti60 F225，Efinity 2026.1；100 路 DSP、10×10 tile、signed8 Q4.4 数据和 signed16 Q8.8 参数。
 
-当前版本支持 `netG_B_epoch11.pth` 的 7×7 输出生成器，采用 checkpoint 的固定 BN 统计生成 affine 参数。整网调度在主机端运行，编码、残差、四相转置卷积和 Tanh 复用同一计算单元。核心及全部缓存/模型参数/Tanh 综合为 **157 BRAM、11515 LUT4、5371 FF、100 DSP**；100MHz 内部时序通过布局布线检查。
+当前版本支持 `netG_B_epoch11.pth` 的 7×7 输出生成器，采用 checkpoint 的固定 BN 统计生成 affine 参数。整网调度在主机端运行，编码、残差、四相转置卷积和 Tanh 复用同一计算单元。核心及全部缓存/模型参数/Tanh 综合为 **157 BRAM、12973 LUT4、4549 FF、100 DSP**；100MHz 内部时序通过布局布线检查。PW 无舍入执行时间已从 `Cin+36` 降至 `Cin+12` 拍，排队指令弹出间隔为 `Cin+13` 拍。
 
-- [本轮实现与验证范围](docs/cyclegan_iteration1.md)
+- [当前执行器效率、指令时间及资源](docs/executor_efficiency_iteration2.md)
+- [DSP48 乘加、移位与 ReLU 可行性核对](docs/dsp48_quantization_feasibility.md)
+- [第一轮模型部署实现与验证范围](docs/cyclegan_iteration1.md)
 - [v1 ISA、数据布局与总线基线](docs/implementation.md)（v2 差异见本轮记录）
 - [开始实现前的可行性分析](docs/cyclegan_deployment_feasibility.md)
 - [v1 验证记录](docs/validation_results.md)（历史版本）
