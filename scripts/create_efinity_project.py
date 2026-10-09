@@ -7,6 +7,7 @@ import shutil
 root=Path(__file__).resolve().parent.parent
 parser=argparse.ArgumentParser()
 parser.add_argument("--staging",type=Path)
+parser.add_argument("--top",choices=["mobilenet_bus_top","cyclegan_bus_top"],default="mobilenet_bus_top")
 args=parser.parse_args()
 destination=args.staging or root / "build" / "efinity"
 destination.mkdir(parents=True,exist_ok=True)
@@ -24,14 +25,15 @@ node(device,"family",name="Titanium")
 node(device,"device",name="Ti60F225")
 node(device,"timing_model",name="C4")
 design=node(project,"design_info",def_veri_version="sv_09",def_vhdl_version="vhdl_2008",unified_flow="false")
-node(design,"top_module",name="mobilenet_bus_top")
+node(design,"top_module",name=args.top)
 sources=["mn_cache.sv","mn_param_ram.sv","mn_instruction_fifo.sv","mn_dw_windows.sv",
-         "mn_pe_array.sv","mn_postprocess.sv","mobilenet_unit.sv","mobilenet_bus_top.sv"]
+         "mn_pe_array.sv","mn_postprocess.sv","mn_model_rom.sv","mn_tanh.sv",
+         "mobilenet_unit.sv","mobilenet_bus_top.sv","cyclegan_bus_top.sv"]
 for source in sources:
     node(design,"design_file",name=("rtl/" if args.staging else "../../rtl/")+source,version="default",library="default")
 if args.staging:
     (destination/"rtl").mkdir(exist_ok=True)
-    for source in sources+["mn_isa.vh"]:
+    for source in sources+["mn_isa.vh","mn_model_params_init.vh","mn_tanh_u8.mem"]:
         shutil.copy2(root/"rtl"/source,destination/"rtl"/source)
 constraints=node(project,"constraint_info")
 node(constraints,"sdc_file",name="mobilenet.sdc")

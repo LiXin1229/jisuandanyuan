@@ -10,6 +10,8 @@ class Operation(IntEnum):
     NORM=1
     DW=2
     NOP=3
+    CONV=4
+    ADD=5
 
 
 class Activation(IntEnum):
@@ -18,7 +20,7 @@ class Activation(IntEnum):
     RELU6=2
 
 
-KERNELS={"1x2":0,"2x1":1,"2x2":2,"3x3":3,"7x7":4}
+KERNELS={"1x2":0,"2x1":1,"2x2":2,"3x3":3,"7x7":4,"1x1":5}
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,10 @@ class Instruction:
     keep_acc: bool=False
     more_acc: bool=False
     stride2: bool=False
+    ring: bool=False
+    top: int=0
+    bottom: int=0
+    tanh: bool=False
 
     def encode(self):
         if self.operation not in tuple(Operation):
@@ -55,11 +61,13 @@ class Instruction:
             raise ValueError("pool and convolution decimation are mutually exclusive")
         if (self.pool or self.stride2) and self.write==0:
             raise ValueError("25-pixel output needs a destination quadrant 1..4")
-        if (self.keep_acc or self.more_acc) and self.operation!=Operation.PW:
-            raise ValueError("split accumulation is a PW mode")
-        if self.operation==Operation.PW and self.src+self.channels>1024:
+        if (self.keep_acc or self.more_acc) and self.operation not in (Operation.PW,Operation.CONV):
+            raise ValueError("split accumulation requires PW or CONV")
+        if not 0<=self.src<1487 or not 0<=self.dst<1487:
+            raise ValueError("Feature addresses must be 0..1486; 1487..1535 is DW scratch")
+        if self.operation==Operation.PW and self.src+self.channels>1487:
             raise ValueError("PW source range exceeds cache")
-        if self.operation==Operation.DW:
+        if self.operation in (Operation.DW,Operation.CONV):
             if self.channels!=1:
                 raise ValueError("DW instruction operates on one channel")
             if self.kernel not in KERNELS.values() or not self.tile_pitch or not self.row_pitch:
@@ -67,18 +75,24 @@ class Instruction:
             if self.edges and (self.padding==0 or self.pad_width not in (1,3) or
                                self.kernel==4 and self.pad_width!=3):
                 raise ValueError("boundary padding must cover the kernel halo")
-        count=([2,2,4,9,49][self.kernel] if self.operation==Operation.DW else
+        count=([2,2,4,9,49,1][self.kernel] if self.operation in (Operation.DW,Operation.CONV) else
                2 if self.operation==Operation.NORM else self.channels)
-        if self.operation!=Operation.NOP and self.parameter+count>4096:
-            raise ValueError("parameter range exceeds RAM")
-        fields=[(self.operation,0,4),(self.src,4,10),(self.dst,14,10),
-                (self.parameter,24,12),(self.channels-1,36,5),(self.kernel,41,3),
+        if self.operation==Operation.ADD:
+            if not 0<=self.parameter<1487:raise ValueError("ADD parameter field is second cache source")
+        elif self.operation!=Operation.NOP and self.parameter+count>21603:
+            raise ValueError("parameter range exceeds model ROM")
+        if self.tanh and (self.operation!=Operation.CONV or self.activation or self.pool or self.stride2 or self.write or self.rounding):
+            raise ValueError("Tanh requires full CONV output without other post operations")
+        fields=[(self.operation,0,4),(self.src & 1023,4,10),(self.dst & 1023,14,10),
+                (self.parameter & 4095,24,12),(self.channels-1,36,5),(self.kernel,41,3),
                 (self.activation,44,2),(self.pool,46,1),(self.write,47,3),
                 (self.padding,50,2),(self.pad_width,52,2),(self.edges,54,4),
                 (self.valid_w-1,58,4),(self.valid_h-1,62,4),
                 (self.tile_pitch,66,10),(self.row_pitch,76,10),
                 (self.rounding,86,1),(self.keep_acc,87,1),(self.more_acc,88,1),
-                (self.stride2,89,1)]
+                (self.stride2,89,1),(self.src>>10,90,1),(self.dst>>10,91,1),
+                (self.parameter>>12,92,3),(self.ring,95,1),(self.top,96,11),(self.bottom,107,11),
+                (self.tanh,118,1)]
         word=0
         for value,shift,bits in fields:
             if not 0<=value<1<<bits:
@@ -126,11 +140,12 @@ if __name__=="__main__":
     p.add_argument("--tile-pitch",type=int,default=1);p.add_argument("--row-pitch",type=int,default=1)
     p.add_argument("--valid-w",type=int,default=10);p.add_argument("--valid-h",type=int,default=10)
     p.add_argument("--write",type=int,default=0)
-    for flag in ["pool","rounding","keep-acc","more-acc","stride2"]:p.add_argument("--"+flag,action="store_true")
+    p.add_argument("--top",type=int,default=0);p.add_argument("--bottom",type=int,default=0)
+    for flag in ["pool","rounding","keep-acc","more-acc","stride2","ring","tanh"]:p.add_argument("--"+flag,action="store_true")
     a=p.parse_args()
     inst=Instruction(Operation[a.operation.upper()],a.src,a.dst,a.parameter,a.channels,
         KERNELS[a.kernel],Activation[a.activation.upper()],a.pool,a.write,
         ["none","zero","reflect"].index(a.padding),a.pad_width,a.edges,a.valid_w,a.valid_h,
-        a.tile_pitch,a.row_pitch,a.rounding,a.keep_acc,a.more_acc,a.stride2)
+        a.tile_pitch,a.row_pitch,a.rounding,a.keep_acc,a.more_acc,a.stride2,a.ring,a.top,a.bottom,a.tanh)
     print(json.dumps({"instruction":f"{inst.encode():032x}",
                      "bus_words_low_first":[f"{w:08x}" for w in inst.bus_words()]},indent=2))

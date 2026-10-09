@@ -1,5 +1,5 @@
 // Ten narrow immutable copies allow one 10-pixel row read per clock.
-// Prebuilt 800-bit windows replace the 2048-bit bidirectional shift network.
+// Windows are emitted into the feature cache; no dedicated window BRAM bank.
 module mn_dw_windows (
     input wire clk,reset,
     input wire load_en,
@@ -9,9 +9,10 @@ module mn_dw_windows (
     input wire [1:0] pad_kind,pad_width,
     input wire [3:0] edges,valid_w,valid_h,
     output wire build_done,
-    input wire rd_en,
-    input wire [5:0] rd_tap,
-    output wire [799:0] rd_data
+    output wire store_valid,
+    input wire store_ready,
+    output wire [5:0] store_tap,
+    output wire [799:0] store_data
 );
     localparam B_IDLE=0,B_PRIME=1,B_STREAM=2,B_STORE=3,B_DONE=4;
     reg [2:0] state;
@@ -73,12 +74,14 @@ module mn_dw_windows (
             .RDATA(data),.RADDR({2'b0,addr}));
         assign row_pixels[c*8+:8]=zero_pipe[c] ? 8'd0 : data;
     end
-    for(c=0;c<40;c=c+1) begin: windows
-        EFX_RAM10 #(.READ_WIDTH(20),.WRITE_WIDTH(20),.OUTPUT_REG(0)) ram (
-            .WCLK(clk),.WE({2{state==B_STORE}}),.WCLKE(1'b1),
-            .WADDREN(state==B_STORE),.WDATA(window_buffer[c*20+:20]),
-            .WADDR({3'b0,tap_number}),.RCLK(clk),.RE(rd_en),.RST(reset),
-            .RADDREN(rd_en),.RDATA(rd_data[c*20+:20]),.RADDR({3'b0,rd_tap}));
+    endgenerate
+    assign store_valid=state==B_STORE;
+    assign store_tap=tap_number;
+    // Feature-cache quadrant order; window_buffer is spatial row-major.
+    generate for(c=0;c<100;c=c+1) begin: pack_window
+        localparam R=c/10,C=c%10;
+        localparam PACK=((R/5)*2+C/5)*25+(R%5)*5+C%5;
+        assign store_data[PACK*8+:8]=window_buffer[c*8+:8];
     end endgenerate
     assign build_done=state==B_DONE;
     always @(posedge clk) begin
@@ -91,7 +94,7 @@ module mn_dw_windows (
                 if(captured==9) state<=B_STORE;
                 else captured<=captured+1'b1;
             end
-            B_STORE:begin
+            B_STORE:if(store_ready) begin
                 if(tap_r==kh-1'b1 && tap_c==kw-1'b1) state<=B_DONE;
                 else begin
                     if(tap_c==kw-1'b1) begin tap_c<=0;tap_r<=tap_r+1'b1;end

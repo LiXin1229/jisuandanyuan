@@ -2,6 +2,11 @@
 from pathlib import Path
 import json
 import random
+import argparse
+
+cli=argparse.ArgumentParser(description=__doc__)
+cli.add_argument('--exhaustive-add',action='store_true',help='Slow native-DSP check of all 65536 operand pairs')
+args=cli.parse_args()
 
 ROOT = Path(__file__).resolve().parent
 rng = random.Random(20261009)
@@ -24,12 +29,13 @@ def pack(tile):
 def instruction(op=0, src=100, dst=900, param=0, channels=1, kernel=3,
                 act=0, pool=0, write=0, pad=0, width=0, edges=0,
                 vw=10, vh=10, tile_pitch=2, row_pitch=12,
-                rounding=0, keep=0, more=0, stride2=0):
-    fields = [(op, 0), (src, 4), (dst, 14), (param, 24), (channels-1, 36),
+                rounding=0, keep=0, more=0, stride2=0, ring=0, top=0, bottom=0,tanh=0):
+    fields = [(op, 0), (src & 1023, 4), (dst & 1023, 14), (param & 4095, 24), (channels-1, 36),
               (kernel, 41), (act, 44), (pool, 46), (write, 47), (pad, 50),
               (width, 52), (edges, 54), (vw-1, 58), (vh-1, 62),
               (tile_pitch, 66), (row_pitch, 76), (rounding, 86),
-              (keep, 87), (more, 88), (stride2, 89)]
+              (keep, 87), (more, 88), (stride2, 89), (src>>10,90), (dst>>10,91),
+              (param>>12,92),(ring,95), (top,96), (bottom,107),(tanh,118)]
     return sum(value << shift for value, shift in fields)
 
 
@@ -217,8 +223,8 @@ for i in range(4):emit(4)
 for i in range(4):emit(5,900+i,data=pack([[i*11+r+c for c in range(10)] for r in range(10)]))
 
 for name,cmd in [
-    ("reserved bits",instruction()|(1<<100)),
-    ("source overflow",instruction(src=1023,channels=2)),
+    ("reserved bits",instruction()|(1<<127)),
+    ("source overflow",instruction(src=1486,channels=2)),
     ("parameter overflow",instruction(param=4095,channels=2)),
     ("DW unknown kernel",instruction(op=2,kernel=7)),
     ("insufficient padding",instruction(op=2,kernel=4,pad=2,width=1,edges=15)),
@@ -230,6 +236,107 @@ begin("DW neighbor address overflow")
 emit(3,data=instruction(op=2,src=1,kernel=3));emit(4,2)
 begin("NOP")
 emit(3,data=instruction(op=3));emit(4)
+
+# V2 extensions use an independently encoded command and whole-image golden.
+for source, destination, channels in [(1040,1350,3),(508,1100,8)]:
+    begin(f"V2 PW src={source} dst={destination}, crossing cache banks")
+    tiles=[[[rng.randrange(-64,65) for _ in range(10)] for _ in range(10)]
+           for _ in range(channels)]
+    weights=[rng.randrange(-128,129) for _ in range(channels)]
+    for ch in range(channels):load(source+ch,tiles[ch]);weight(ch,weights[ch])
+    emit(3,data=instruction(src=source,dst=destination,channels=channels,rounding=1))
+    emit(4)
+    expected=[[quant(128+sum(tiles[ch][r][c]*weights[ch] for ch in range(channels)),0)
+               for c in range(10)] for r in range(10)]
+    emit(5,destination,data=pack(expected))
+
+for kernel in (3,4):
+    for ty in (0,2,4):
+        begin(f"V2 DW ring, kernel={kernel}, logical row={ty}")
+        kh,kw,ay,ax=kernels[kernel];tx=1;height=50;width=30
+        base=1100;pitch=2;row_stride=12
+        def ring_address(y,x):return base+(y%3)*row_stride+x*pitch
+        for dy in (-1,0,1):
+            for dx in (-1,0,1):
+                y,x=ty+dy,tx+dx
+                if not 0<=y<5:continue
+                load(ring_address(y,x),[[image_pixel(y*10+r,x*10+c)
+                                         for c in range(10)] for r in range(10)])
+        weights=[rng.randrange(-90,91) for _ in range(kh*kw)]
+        for i,w in enumerate(weights):weight(2000+i,w)
+        edge=(4 if ty==0 else 0)|(8 if ty==4 else 0)
+        cmd=instruction(op=2,src=ring_address(ty,tx),dst=1350,param=2000,kernel=kernel,
+                        pad=2,width=3 if kernel==4 else 1,edges=edge,tile_pitch=pitch,
+                        row_pitch=row_stride,rounding=1,ring=1,
+                        top=ring_address(max(0,ty-1),tx),bottom=ring_address(min(4,ty+1),tx))
+        expected=[]
+        for r in range(10):
+            row=[]
+            for c in range(10):
+                total=128
+                for ky in range(kh):
+                    for kx in range(kw):
+                        y=reflected(ty*10+r+ky-ay,height)
+                        x=reflected(tx*10+c+kx-ax,width)
+                        total+=image_pixel(y,x)*weights[ky*kw+kx]
+                row.append(quant(total,0))
+            expected.append(row)
+        emit(3,data=cmd);emit(4);emit(5,1350,data=pack(expected))
+
+add_codes=list(range(65536)) if args.exhaustive_add else [
+    (a+128)*256+b for a in (-128,-127,-96,-16,-1,0,1,16,96,126,127) for b in range(256)]
+begin("ADD signed8 operand boundaries, shared DSP accumulator")
+for start in range(0,len(add_codes),100):
+    pairs=[divmod(add_codes[min(start+i,len(add_codes)-1)],256) for i in range(100)]
+    left=[[pairs[r*10+c][0]-128 for c in range(10)] for r in range(10)]
+    right=[[pairs[r*10+c][1]-128 for c in range(10)] for r in range(10)]
+    load(1040,left);load(1041,right)
+    emit(3,data=instruction(op=5,src=1040,dst=1350,param=1041,rounding=1))
+    emit(4)
+    result=[[max(-128,min(127,left[r][c]+right[r][c])) for c in range(10)] for r in range(10)]
+    emit(5,1350,data=pack(result))
+
+for kernel,cin,tanh in [(5,3,0),(0,3,0),(1,3,0),(2,3,0),(3,3,0),(4,8,1)]:
+    begin(f"CONV raw continuation, kernel={kernel}, cin={cin}, tanh={tanh}")
+    kh,kw,ay,ax=(1,1,0,0) if kernel==5 else kernels[kernel]
+    total=[[0]*10 for _ in range(10)]
+    for channel in range(cin):
+        def value(y,x):return ((y*31+x*17+channel*13)%121)-60
+        for dy in (-1,0):
+            for dx in (-1,0):
+                load(100+dy*12+dx*2,[[value((1+dy)*10+r,(1+dx)*10+c)
+                                      for c in range(10)] for r in range(10)])
+        weights=[rng.randrange(-180,181) for _ in range(kh*kw)]
+        for k,w in enumerate(weights):weight(1000+channel*kh*kw+k,w)
+        for r in range(10):
+            for c in range(10):
+                for kr in range(kh):
+                    for kc in range(kw):
+                        y,x=10+r+kr-ay,10+c+kc-ax
+                        if y>=20 or x>=20:
+                            if kernel==4:y=reflected(y,20);x=reflected(x,20)
+                            else:continue
+                        total[r][c]+=value(y,x)*weights[kr*kw+kc]
+        if channel==0:load(1350,[[-37]*10 for _ in range(10)])
+        emit(3,data=instruction(op=4,src=100,dst=1350,param=1000+channel*kh*kw,
+                               kernel=kernel,rounding=not tanh,keep=channel!=0,more=channel!=cin-1,
+                               pad=2 if kernel==4 else 1,width=3 if kernel==4 else 1,
+                               edges=10 if kernel!=5 else 0,tanh=tanh))
+        emit(4)
+        if channel!=cin-1:emit(5,1350,data=pack([[-37]*10 for _ in range(10)]))
+    if tanh:
+        lut=[int(v,16) for v in (ROOT.parent/'rtl/mn_tanh_u8.mem').read_text().split()]
+        result=[[lut[max(-2048,min(2047,(v+8)>>4))+2048] for v in row] for row in total]
+    else:result=[[quant(v+128,0) for v in row] for row in total]
+    emit(5,1350,data=pack(result))
+
+begin("Invalid spatial continuation preserves the live raw accumulator")
+tile=[[r*7-c*5 for c in range(10)] for r in range(10)]
+load(100,tile);load(101,tile);load(1350,[[-37]*10 for _ in range(10)]);weight(1000,128)
+emit(3,data=instruction(op=4,src=100,dst=1350,param=1000,kernel=5,rounding=1,more=1));emit(4)
+emit(3,data=instruction(op=4,src=1,dst=1350,param=1000,kernel=3,rounding=1,keep=1));emit(4,2)
+emit(3,data=instruction(op=4,src=101,dst=1350,param=1000,kernel=5,rounding=1,keep=1));emit(4)
+emit(5,1350,data=pack(tile))
 
 ROOT.joinpath("vectors.txt").write_text("\n".join(lines)+"\n",encoding="ascii")
 ROOT.joinpath("cases.json").write_text(json.dumps(cases,ensure_ascii=False,indent=2)+"\n",encoding="utf8")

@@ -7,10 +7,10 @@ module tb_mobilenet_unit;
     wire instruction_ready;
     wire [2:0] instruction_count;
     reg host_cache_wr=0,host_cache_rd=0,host_param_wr=0;
-    reg [9:0] host_cache_waddr=0,host_cache_raddr=0;
+    reg [10:0] host_cache_waddr=0,host_cache_raddr=0;
     reg [799:0] host_cache_wdata=0;
-    reg [3:0] host_cache_wmask=15;
-    reg [11:0] host_param_addr=0;
+    reg [39:0] host_cache_wmask=40'hffffffffff;
+    reg [14:0] host_param_addr=0;
     reg [15:0] host_param_data=0;
     wire host_memory_ready,host_cache_rvalid,busy,done;
     wire [799:0] host_cache_rdata;
@@ -21,7 +21,7 @@ module tb_mobilenet_unit;
     integer metrics,started=0;
     reg [127:0] active_command;
     reg [799:0] payload;
-    reg [3:0] errors [0:511];
+    reg [3:0] errors [0:2047];
     always @(posedge clk) begin
         cycle<=cycle+1;
         if(done) begin
@@ -52,7 +52,8 @@ module tb_mobilenet_unit;
             case(op)
                 1:begin
                     wait_memory();host_cache_wr=1;host_cache_waddr=address;
-                    host_cache_wdata=payload;host_cache_wmask=aux;
+                    host_cache_wdata=payload;
+                    host_cache_wmask={{10{aux[3]}},{10{aux[2]}},{10{aux[1]}},{10{aux[0]}}};
                     @(negedge clk);host_cache_wr=0;
                 end
                 2:begin

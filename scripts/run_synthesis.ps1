@@ -1,14 +1,15 @@
-param([string]$Python = 'D:\Users\Administrator\anaconda3\python.exe',
-      [string]$EfinityRoot = 'D:\Efinity\2026.1')
+param([string]$Python = 'python',
+      [string]$EfinityRoot = 'D:\Efinity\2026.1',
+      [string]$Top = 'mobilenet_bus_top')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
 try {
-    & $Python scripts/create_efinity_project.py
+    & $Python scripts/create_efinity_project.py --top $Top
     if ($LASTEXITCODE -ne 0) { throw 'Project creation failed' }
     # Efinity native tools require ASCII-only paths. Isolate each run in TEMP.
     $synthesisStage = Join-Path $env:TEMP ('mobilenet_ti60_' + [guid]::NewGuid().ToString('N'))
-    & $Python scripts/create_efinity_project.py --staging $synthesisStage
+    & $Python scripts/create_efinity_project.py --staging $synthesisStage --top $Top
     if ($LASTEXITCODE -ne 0) { throw 'ASCII staging failed' }
     Set-Content -LiteralPath build/efinity/staging_path.txt -Value $synthesisStage
     Push-Location $synthesisStage

@@ -1,4 +1,4 @@
-param([string]$Python = 'D:\Users\Administrator\anaconda3\python.exe')
+param([string]$Python = 'python')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot

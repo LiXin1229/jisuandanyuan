@@ -4,6 +4,8 @@
 `define MN_OP_NORM 4'd1
 `define MN_OP_DW   4'd2
 `define MN_OP_NOP  4'd3
+`define MN_OP_CONV 4'd4
+`define MN_OP_ADD  4'd5
 `define MN_ACT_NONE 2'd0
 `define MN_ACT_RELU 2'd1
 `define MN_ACT_RELU6 2'd2

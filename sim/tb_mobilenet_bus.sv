@@ -8,7 +8,8 @@ module tb_mobilenet_bus;
     wire [31:0] bus_rdata;
     wire [3:0] error_code;
     mobilenet_bus_top dut(.*);
-    integer i,ticks=0,r,c,dy,dx,sum,index;
+    integer i,ticks=0,r,c,dy,dx,sum,index,slice;
+    reg [39:0] row_mask;
     reg [799:0] expected,actual,dw_expected;
     reg [127:0] command;
     reg [31:0] word_value;
@@ -120,7 +121,30 @@ module tb_mobilenet_bus;
         write_word(1,900);write_word(4,1);
         for(i=0;i<25;i=i+1) begin read_word(32+i,word_value);actual[i*32+:32]=word_value;end
         if(actual!==expected) $fatal(1,"Aborted instruction corrupted destination");
-        $display("PASS bus: PW identity, DW 9-tap integer golden, staging, parameter increment, backpressure, result snapshot, W1C, reset cancellation");
+        // Row-fragment writes into bank 2 preserve every other row and tile.
+        write_word(1,1350);write_word(2,15);write_word(3,1);
+        expected=actual;
+        for(r=0;r<10;r=r+1) begin
+            row_mask=0;
+            for(c=0;c<10;c=c+1) begin
+                index=((r/5)*2+c/5)*25+(r%5)*5+c%5;
+                expected[index*8+:8]=r*10+c;
+            end
+            for(slice=0;slice<40;slice=slice+1)
+                if((slice/10)/2==r/5 && ((slice%10)/2)==r%5) row_mask[slice]=1;
+            for(i=0;i<25;i=i+1) write_word(32+i,expected[i*32+:32]);
+            write_word(12,row_mask[31:0]);write_word(13,{24'd0,row_mask[39:32]});
+            write_word(3,1);write_word(4,1);
+            for(i=0;i<25;i=i+1) begin read_word(32+i,word_value);actual[i*32+:32]=word_value;end
+            if(actual!==expected) $fatal(1,"Masked row write or untouched row mismatch: %0d",r);
+        end
+        // Bank 3 is invalid and must not alias bank 0 or bank 2.
+        write_word(1,1536);write_word(2,15);write_word(3,1);write_word(4,1);
+        for(i=0;i<25;i=i+1) begin read_word(32+i,word_value);if(word_value!==0) $fatal(1,"Invalid address aliased");end
+        write_word(1,1350);write_word(4,1);
+        for(i=0;i<25;i=i+1) begin read_word(32+i,word_value);actual[i*32+:32]=word_value;end
+        if(actual!==expected) $fatal(1,"Invalid write corrupted bank 2");
+        $display("PASS bus: PW/DW golden, staging, backpressure, reset, bank2 row masks, invalid address isolation");
         $finish;
     end
 endmodule
