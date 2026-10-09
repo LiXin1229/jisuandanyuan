@@ -19,19 +19,47 @@ module tb_mobilenet_unit;
     integer completed=0,consumed=0,cycle=0,op,address,aux,fd,rc,n;
     integer last_case=0;
     integer metrics,started=0;
+    integer fast_count=0,fast_previous=0,fast_expected;
     reg [127:0] active_command;
     reg [799:0] payload;
+    string vector_path,metrics_path;
     reg [3:0] errors [0:2047];
     always @(posedge clk) begin
         cycle<=cycle+1;
+        if(dut.d1_valid && dut.d1_fast_load) begin
+            if($test$plusargs("trace")) $display("TIMING_MAC cycle=%0d tap=%0d",cycle,dut.d1_owner);
+            case(fast_count)
+                0:fast_expected=4;
+                1:fast_expected=1;
+                2:fast_expected=7;
+                3:fast_expected=3;
+                4:fast_expected=5;
+                5:fast_expected=0;
+                6:fast_expected=2;
+                7:fast_expected=6;
+                8:fast_expected=8;
+                default:$fatal(1,"Too many fast DW MACs");
+            endcase
+            if(dut.d1_owner!==fast_expected[3:0] || (fast_count!=0 && cycle!=fast_previous+1))
+                $fatal(1,"Fast DW must accept nine ordered consecutive MACs");
+            if(dut.d1_last!==(fast_count==8)) $fatal(1,"Fast DW last tag mismatch");
+            fast_count=fast_count+1;fast_previous=cycle;
+        end
         if(done) begin
+            if($test$plusargs("trace")) $display("TIMING_DONE cycle=%0d",cycle-1);
+            if(error_code==0 && (active_command[3:0]==2 || active_command[3:0]==4) &&
+                active_command[43:41]==3 && active_command[61:58]==9 && active_command[65:62]==9 && fast_count!=9)
+                $fatal(1,"Fast DW completed without nine MACs");
             errors[completed]=error_code;
             $fwrite(metrics,"%0d,%0d,%0d,%0d,%0d,%0d,%0d,%0d\n",completed+1,last_case,
                 active_command[3:0],active_command[40:36]+1,active_command[43:41],
                 active_command[51:50],cycle-started,error_code);
             completed=completed+1;
         end
-        if(dut.fifo_pop) begin started=cycle;active_command=dut.fifo_head;end
+        if(dut.fifo_pop) begin
+            started=cycle;active_command=dut.fifo_head;fast_count=0;
+            if($test$plusargs("trace")) $display("TIMING_POP cycle=%0d",cycle);
+        end
         if(cycle>150000) $fatal(1,"Global timeout, case %0d state %0d",last_case,dut.state);
     end
     task wait_memory;
@@ -41,8 +69,10 @@ module tb_mobilenet_unit;
     endtask
     initial begin
         repeat(3) @(negedge clk);reset=0;
-        fd=$fopen("sim/vectors.txt","r");
-        metrics=$fopen("build/sim/commands.csv","w");
+        if(!$value$plusargs("vectors=%s",vector_path)) vector_path="sim/vectors.txt";
+        if(!$value$plusargs("metrics=%s",metrics_path)) metrics_path="build/sim/commands.csv";
+        fd=$fopen(vector_path,"r");
+        metrics=$fopen(metrics_path,"w");
         $fwrite(metrics,"command,case,opcode,channels,kernel,padding,cycles,error\n");
         if(fd==0) $fatal(1,"Missing generated vectors");
         while(!$feof(fd)) begin

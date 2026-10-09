@@ -1,5 +1,7 @@
 # 执行器效率优化：第二轮
 
+> 本文为提交 `6a7c678` 对应的历史结果。当前已改为一拍全并行后处理，并增加完整 tile 的连续九拍 3×3 DW；最新资源和时间见 [第三轮效率记录](executor_efficiency_iteration3.md)。
+
 基线为 `ace7b30`，目标为减少指令固定开销、保持整数参考逐值一致和 BRAM 不超过约 180。当前 RTL 的资源、时序和测试摘要保存在 [第二轮验证记录](analysis/cyclegan_iteration2_results.json)。DSP 移位/C 端口/ReLU 的独立核对见 [DSP48 可行性分析](dsp48_quantization_feasibility.md)。
 
 ## 为什么 PW 原来是 Cin+36 拍

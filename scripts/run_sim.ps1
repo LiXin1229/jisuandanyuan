@@ -12,12 +12,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'DSP probe compilation failed' }
     & vvp -i build/sim/dsp_quant_probe.vvp | Tee-Object -FilePath build/sim/dsp_quant_probe.log
     if ($LASTEXITCODE -ne 0) { throw 'DSP feasibility probe failed' }
+    & iverilog -g2012 -s tb_dw_fast3 -o build/sim/dw_fast3.vvp sim/tb_dw_fast3.sv rtl/mn_dw_fast3.sv
+    if ($LASTEXITCODE -ne 0) { throw 'Fast DW compilation failed' }
+    & vvp -i build/sim/dw_fast3.vvp | Tee-Object -FilePath build/sim/dw_fast3.log
+    if ($LASTEXITCODE -ne 0) { throw 'Fast DW simulation failed' }
     & iverilog -g2012 -s tb_postprocess -I rtl -o build/sim/postprocess.vvp sim/tb_postprocess.sv rtl/mn_postprocess.sv
     if ($LASTEXITCODE -ne 0) { throw 'Postprocess compilation failed' }
     & vvp -i build/sim/postprocess.vvp | Tee-Object -FilePath build/sim/postprocess.log
     if ($LASTEXITCODE -ne 0) { throw 'Postprocess simulation failed' }
     $rtlSources = @('rtl/mn_cache.sv','rtl/mn_param_ram.sv','rtl/mn_instruction_fifo.sv',
-        'rtl/mn_dw_windows.sv','rtl/mn_pe_array.sv','rtl/mn_postprocess.sv',
+        'rtl/mn_dw_windows.sv','rtl/mn_dw_fast3.sv','rtl/mn_pe_array.sv','rtl/mn_postprocess.sv',
         'rtl/mn_model_rom.sv','rtl/mn_tanh.sv','rtl/mobilenet_unit.sv')
     & iverilog -g2012 -s tb_mobilenet_unit -I rtl -o build/sim/unit.vvp sim/tb_mobilenet_unit.sv @rtlSources conv_mem/conv_mem_unit/efx_ram10.v yilisi_sim_models/efx_dpram10.v build/sim/efx_dsp48_compat.sv
     if ($LASTEXITCODE -ne 0) { throw 'RTL compilation failed' }

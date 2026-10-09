@@ -24,7 +24,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     localparam IDLE=0, CHECK=1, CLEAR=2, PW_RUN=4,
         N_X=6, DW_CENTER=7, DW_RET=8, DW_LOAD=9,
         DW_SET=10, BUILD_START=11, BUILD_WAIT=12,
-        WAIT_PE=18, WAIT_POST=19, COMPLETE=21,WAIT_TANH=22,ADD_FIRST=23,ADD_SECOND=24;
+        WAIT_PE=18, WAIT_POST=19, COMPLETE=21,WAIT_TANH=22,ADD_FIRST=23,ADD_SECOND=24,FAST_RUN=25;
     localparam SRC_WINDOW=0, SRC_CACHE=1, SRC_BIAS=2, SRC_ROUND=3;
     reg [4:0] state;
     reg [127:0] cmd;
@@ -37,6 +37,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     wire [14:0] param_base={cmd[94:92],cmd[35:24]};
     wire tanh_enable=cmd[118];
     wire spatial=opcode==`MN_OP_DW || opcode==`MN_OP_CONV;
+    wire fast_spatial=spatial && kernel==3 && valid_w==10 && valid_h==10;
     wire continuation=opcode==`MN_OP_PW || opcode==`MN_OP_CONV;
     wire [5:0] channels={1'b0,cmd[40:36]}+6'd1;
     wire [2:0] kernel=cmd[43:41];
@@ -163,6 +164,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     wire load_row_last=hcol==col_end || (!hcol[0] && hcol+4'd1==col_end);
 
     reg issue_valid,issue_last,issue_bias,issue_const,issue_add;
+    reg [3:0] issue_owner;
     reg [1:0] issue_source;
     reg [14:0] issue_param;
     reg cache_rd_en;
@@ -172,6 +174,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     always @* begin
         issue_valid=0;issue_last=0;issue_source=SRC_WINDOW;
         issue_param=param_base;issue_bias=0;issue_const=0;issue_add=0;
+        issue_owner=4;
         cache_rd_en=0;
         cache_rd_addr=src_base;
         case(state)
@@ -203,6 +206,11 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
                 issue_valid=1;issue_source=SRC_CACHE;
                 issue_param=param_base+center_tap;
                 cache_rd_en=1;cache_rd_addr=src_base;
+            end
+            FAST_RUN:begin
+                issue_valid=1;issue_last=owner==8;issue_source=SRC_WINDOW;
+                issue_owner=owner;issue_param=param_base+owner;
+                cache_rd_en=!tile_absent;cache_rd_addr=neighbor_addr[10:0];
             end
             DW_SET:begin
                 cache_rd_en=!tile_absent && neighbor_ok;
@@ -274,23 +282,32 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
 
     wire [799:0] input_tile;
     reg d1_valid,d1_last;
+    reg [3:0] d1_owner;
+    reg d1_fast_load;
     reg [1:0] d1_source;
     reg d1_bias,d1_const,d1_add;
+    wire [799:0] fast_pixels;
+    mn_dw_fast3 fast_windows(.clk(clk),.reset(reset),
+        .accept(d1_valid && d1_fast_load),.owner(d1_owner),
+        .edges(edges),.pad_kind(pad_kind),.tile(cache_data),.pixels(fast_pixels));
     genvar p;
     generate for(p=0;p<100;p=p+1) begin: input_pixels
         localparam R=p/10,C=p%10;
         localparam PACK=((R/5)*2+C/5)*25+(R%5)*5+C%5;
         assign input_tile[p*8+:8]=d1_source==SRC_CACHE ? cache_data[PACK*8+:8] :
-            d1_source==SRC_BIAS ? 8'd16 : 8'd1;
+            d1_source==SRC_WINDOW ? fast_pixels[p*8+:8] : d1_source==SRC_BIAS ? 8'd16 : 8'd1;
     end endgenerate
     always @(posedge clk) begin
         if(reset) begin
             d1_valid<=0;d1_last<=0;
             d1_source<=0;d1_bias<=0;d1_const<=0;d1_add<=0;
+            d1_owner<=0;d1_fast_load<=0;
         end else begin
             d1_valid<=issue_valid;
             d1_last<=issue_valid && issue_last;
             d1_source<=issue_source;
+            d1_owner<=issue_owner;
+            d1_fast_load<=fast_spatial && !issue_const;
             d1_bias<=issue_bias;
             d1_const<=issue_const;
             d1_add<=issue_add;
@@ -390,6 +407,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
                     else if(rounding && !keep_acc) state<=opcode==`MN_OP_ADD ? ADD_FIRST :
                         spatial && kernel!=5 ? DW_CENTER : PW_RUN;
                     else if(opcode==`MN_OP_ADD) state<=ADD_SECOND;
+                    else if(fast_spatial) begin owner<=1;state<=FAST_RUN;end
                     else if(spatial && kernel!=5) begin owner<=4;missing_tile<=0;state<=DW_RET;end
                     else state<=channels==1 ? WAIT_PE : PW_RUN;
                 end
@@ -400,7 +418,22 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
                 N_X:state<=WAIT_PE;
                 ADD_FIRST:state<=ADD_SECOND;
                 ADD_SECOND:state<=WAIT_PE;
-                DW_CENTER:begin owner<=4;missing_tile<=0;state<=DW_RET;end
+                DW_CENTER:begin
+                    owner<=fast_spatial ? 1 : 4;missing_tile<=0;
+                    state<=fast_spatial ? FAST_RUN : DW_RET;
+                end
+                FAST_RUN:begin
+                    case(owner)
+                        1:owner<=7;
+                        7:owner<=3;
+                        3:owner<=5;
+                        5:owner<=0;
+                        0:owner<=2;
+                        2:owner<=6;
+                        6:owner<=8;
+                        default:state<=WAIT_PE;
+                    endcase
+                end
                 DW_SET:begin
                     if(!tile_absent && !neighbor_ok) begin error_code<=2;state<=COMPLETE;end
                     else begin missing_tile<=tile_absent;state<=DW_RET;end

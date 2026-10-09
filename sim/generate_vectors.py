@@ -338,6 +338,38 @@ emit(3,data=instruction(op=4,src=1,dst=1350,param=1000,kernel=3,rounding=1,keep=
 emit(3,data=instruction(op=4,src=101,dst=1350,param=1000,kernel=5,rounding=1,keep=1));emit(4)
 emit(5,1350,data=pack(tile))
 
+# Full-tile fast3 integration, including all four-edge combinations. The
+# reference samples an image, independently of the hardware's read/tap order.
+for pad in (1,2):
+    for edge in range(16):
+        begin(f"Fast3 all edges={edge}, pad={pad}, full tile")
+        tx=0 if edge&1 else 1;ty=0 if edge&4 else 1
+        nx=tx+1 if edge&2 else tx+2;ny=ty+1 if edge&8 else ty+2
+        width=nx*10;height=ny*10
+        def location(y,x):return 1100+y*12+x*2
+        for y in range(ny):
+            for x in range(nx):
+                load(location(y,x),[[image_pixel(y*10+r,x*10+c) for c in range(10)] for r in range(10)])
+        weights=[-31,17,29,-13,37,-23,19,-41,11]
+        for k,w in enumerate(weights):weight(1700+k,w)
+        result=[]
+        for r in range(10):
+            row=[]
+            for c in range(10):
+                total=128
+                for kr in range(3):
+                    for kc in range(3):
+                        y=ty*10+r+kr-1;x=tx*10+c+kc-1
+                        if not 0<=y<height or not 0<=x<width:
+                            if pad==1:continue
+                            y=reflected(y,height);x=reflected(x,width)
+                        total+=image_pixel(y,x)*weights[kr*3+kc]
+                row.append(quant(total,0))
+            result.append(row)
+        emit(3,data=instruction(op=2,src=location(ty,tx),dst=1350,param=1700,kernel=3,
+                               rounding=1,pad=pad,width=1,edges=edge))
+        emit(4);emit(5,1350,data=pack(result))
+
 ROOT.joinpath("vectors.txt").write_text("\n".join(lines)+"\n",encoding="ascii")
 ROOT.joinpath("cases.json").write_text(json.dumps(cases,ensure_ascii=False,indent=2)+"\n",encoding="utf8")
 print(f"Generated {len(cases)} deterministic cases, {len(lines)} transactions")

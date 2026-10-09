@@ -15,7 +15,7 @@ module tb_postprocess;
     task check_tile;
         begin
             in_valid=1;@(negedge clk);in_valid=0;
-            while(!tile_valid) @(negedge clk);
+            if(!tile_valid) $fatal(1,"Parallel postprocess exceeded one acceptance cycle");
             if(!pool_valid) $fatal(1,"Pool and full-tile completion lost alignment");
             for(p=0;p<100;p=p+1) begin
                 r=p/10;c=p%10;
@@ -72,11 +72,12 @@ module tb_postprocess;
             end
             valid_w=10;valid_h=10;
         end
-        // Reset during a partial group scan must suppress both output valids.
-        in_valid=1;@(negedge clk);in_valid=0;repeat(2) @(negedge clk);
-        reset=1;@(negedge clk);reset=0;repeat(30) @(negedge clk);
+        // Reset on the acceptance edge suppresses both one-cycle outputs.
+        in_valid=1;reset=1;@(negedge clk);in_valid=0;
+        if(tile_valid || pool_valid) $fatal(1,"Postprocess accepted during reset");
+        reset=0;repeat(3) @(negedge clk);
         if(tile_valid || pool_valid) $fatal(1,"Canceled postprocess completed");
-        $display("PASS grouped postprocess: %0d pixels, signed16 exhaustive, signed32 extremes, partial pooling and reset",checks);
+        $display("PASS parallel postprocess: %0d pixels, signed16 exhaustive, signed32 extremes, partial pooling and reset",checks);
         $finish;
     end
 endmodule

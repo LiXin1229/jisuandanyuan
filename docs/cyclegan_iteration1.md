@@ -1,6 +1,6 @@
 # CycleGAN epoch11 第一轮实现
 
-> 本文资源、时间和测试数字为第一轮历史结果。当前 RTL 的后处理和 DW 流水已优化，最新数字见 [第二轮效率记录](executor_efficiency_iteration2.md)。ISA、固定模型及主机调度范围保持兼容。
+> 本文资源、时间和测试数字为第一轮历史结果。当前 RTL 的后处理和 DW 流水已优化，最新数字见 [第三轮效率记录](executor_efficiency_iteration3.md)。ISA、固定模型及主机调度范围保持兼容。
 
 目标是 `pe10_10/netG_B_epoch11.pth`、320×240 RGB、7×7 输出层。开始修改前已建立 Git 并提交原始工程，基线为 `820a5df`。参考工程只读。
 

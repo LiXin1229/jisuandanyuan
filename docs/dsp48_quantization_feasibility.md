@@ -67,4 +67,4 @@ iverilog -g2012 -s tb_dsp_quant_probe -o build/sim/dsp_quant_probe.vvp sim/tb_ds
 vvp -i build/sim/dsp_quant_probe.vvp
 ```
 
-本轮没有根据“零 LUT ReLU”假设修改生产 PE。已完成的执行器效率优化针对扫描、装载与状态机开销，资源和时序见 [第二轮效率记录](executor_efficiency_iteration2.md)。
+没有根据“零 LUT ReLU”假设修改生产 PE。最新执行器已采用一拍后处理和完整 tile 的连续九拍 3×3 DW，资源和时序见 [第三轮效率记录](executor_efficiency_iteration3.md)。

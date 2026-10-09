@@ -50,10 +50,32 @@ def main():
         'model_assets_rtl': passed('build/sim/assets.log', r'PASS assets:[^\r\n]+'),
         'model_bus_rtl': passed('build/sim/model_bus.log', r'PASS epoch11 bus:[^\r\n]+'),
         'model_bus_mapped': passed('build/sim/model_postmap.log', r'PASS epoch11 bus:[^\r\n]+'),
-        'postprocess_rtl': passed('build/sim/postprocess.log', r'PASS (?:serial|grouped) postprocess:[^\r\n]+'),
+        'postprocess_rtl': passed('build/sim/postprocess.log', r'PASS (?:serial|grouped|parallel) postprocess:[^\r\n]+'),
     }
     if (ROOT/'build/sim/dsp_quant_probe.log').exists():
         tests['dsp_primitive_probe'] = passed('build/sim/dsp_quant_probe.log', r'PASS W feedback:[^\r\n]+')
+    if (ROOT/'build/sim/dw_fast3.log').exists():
+        tests['fast_dw_windows'] = passed('build/sim/dw_fast3.log', r'PASS fast3 windows:[^\r\n]+')
+    if (ROOT/'build/sim/fast_unit.log').exists():
+        tests['fast_dw_cadence'] = passed('build/sim/fast_unit.log', r'PASS: \d+ cases, 32 commands, \d+ cycles')
+        tests['fast_dw_cadence']['scope'] = 'Case labels 110..141; 32 commands, each checked for nine ordered consecutive PE acceptances'
+    executor_timing = None
+    if (ROOT/'build/sim/fast_timing.log').exists():
+        tests['executor_timing'] = passed('build/sim/fast_timing.log', r'PASS: \d+ cases, 5 commands, \d+ cycles')
+        tests['executor_timing']['scope'] = 'Case label 62: unpadded DW; label 84: four queued PW commands'
+        trace = (ROOT/'build/sim/fast_timing.log').read_text()
+        pops = [int(x) for x in re.findall(r'TIMING_POP cycle=(\d+)', trace)]
+        dones = [int(x) for x in re.findall(r'TIMING_DONE cycle=(\d+)', trace)]
+        macs = [[int(x), int(y)] for x,y in re.findall(r'TIMING_MAC cycle=(\d+) tap=(\d+)', trace)]
+        assert len(pops) == len(dones) == 5
+        assert [b-a for a,b in zip(pops,dones)] == [17,9,9,9,9]
+        assert [x[0] for x in macs] == list(range(pops[0]+3,pops[0]+12))
+        assert [x[1] for x in macs] == [4,1,7,3,5,0,2,6,8]
+        assert all(pops[i] == dones[i-1]+1 for i in range(2,5))
+        executor_timing = {'dw_pop': pops[0], 'dw_mac_cycle_and_tap': macs,
+                           'dw_done': dones[0], 'pw_queued_pops': pops[1:],
+                           'pw_dones': dones[1:], 'execution_cycles': [17,9,9,9,9],
+                           'queued_switch_cycles': 1}
     cases, count, cycles = [int(x) for x in re.findall(r'\d+', tests['core_rtl']['summary'])]
     assert len(commands) == count and max(int(x['case']) for x in commands) == cases
     tests['core_rtl'].update(cases=cases, commands=count, cycles=cycles,
@@ -75,6 +97,7 @@ def main():
               'internal_timing': {'target_mhz': 100, 'setup_slack_ns': setup,
                                   'hold_slack_ns': hold, 'board_io_constrained': False},
               'tests': tests, 'full_network_instruction_model': frames,
+              'executor_timing': executor_timing,
               'host_protocol': {'row_commits_checked': 70, 'addresses_checked': 7,
                                 'scope': 'Python protocol model; separate RTL bus tests'},
               'limitations': ['host keeps full feature maps and interleaves transpose phases',

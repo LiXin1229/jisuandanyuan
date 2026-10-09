@@ -82,7 +82,7 @@ module tb_mobilenet_bus;
         // Complete a DW instruction through all 9 nonzero taps. The golden
         // calculation uses original input bytes and independent integer sums.
         write_word(5,200);
-        for(i=0;i<9;i=i+1) write_word(6,256);
+        for(i=0;i<49;i=i+1) write_word(6,256);
         for(r=0;r<10;r=r+1) for(c=0;c<10;c=c+1) begin
             sum=0;
             for(dy=-1;dy<=1;dy=dy+1) for(dx=-1;dx<=1;dx=dx+1)
@@ -106,7 +106,7 @@ module tb_mobilenet_bus;
         if(actual!==dw_expected) $fatal(1,"DW mapped/RTL golden mismatch");
         write_word(0,2);
         // Abort a DW in halo fill and a queued PW. Reset must flush both.
-        command[23:14]=900;
+        command[23:14]=900;command[43:41]=4;command[53:52]=3;
         send_command(command);
 `ifdef MN_POSTMAP
         repeat(30) @(negedge clk);
@@ -121,6 +121,21 @@ module tb_mobilenet_bus;
         write_word(1,900);write_word(4,1);
         for(i=0;i<25;i=i+1) begin read_word(32+i,word_value);actual[i*32+:32]=word_value;end
         if(actual!==expected) $fatal(1,"Aborted instruction corrupted destination");
+        // Abort the new fast3 path during its nine-MAC sequence as well.
+        command[3:0]=2;command[43:41]=3;command[53:52]=1;
+        send_command(command);
+`ifdef MN_POSTMAP
+        repeat(4) @(negedge clk);
+`else
+        while(dut.unit.state!=25) @(negedge clk);
+`endif
+        reset=1;repeat(3) @(negedge clk);reset=0;
+        repeat(20) @(negedge clk);
+        read_word(0,word_value);
+        if(busy || done_sticky || word_value[11:9]!=0) $fatal(1,"Fast DW reset cancellation");
+        write_word(1,900);write_word(4,1);
+        for(i=0;i<25;i=i+1) begin read_word(32+i,word_value);actual[i*32+:32]=word_value;end
+        if(actual!==expected) $fatal(1,"Aborted fast DW corrupted destination");
         // Row-fragment writes into bank 2 preserve every other row and tile.
         write_word(1,1350);write_word(2,15);write_word(3,1);
         expected=actual;
@@ -144,7 +159,7 @@ module tb_mobilenet_bus;
         write_word(1,1350);write_word(4,1);
         for(i=0;i<25;i=i+1) begin read_word(32+i,word_value);actual[i*32+:32]=word_value;end
         if(actual!==expected) $fatal(1,"Invalid write corrupted bank 2");
-        $display("PASS bus: PW/DW golden, staging, backpressure, reset, bank2 row masks, invalid address isolation");
+        $display("PASS bus: PW/DW golden, staging, backpressure, generic/fast DW reset, bank2 row masks, invalid address isolation");
         $finish;
     end
 endmodule

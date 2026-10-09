@@ -1,0 +1,224 @@
+{
+  "recorded_utc": "2026-10-09T07:58:46.845046+00:00",
+  "baseline_git_commit": "6a7c678",
+  "top": "cyclegan_bus_top",
+  "device": "Ti60F225",
+  "efinity": "2026.1.132",
+  "timing_model": "C4",
+  "synthesis_resources": {
+    "EFX_LUT4": 20481,
+    "EFX_FF": 5884,
+    "EFX_DSP48": 100,
+    "EFX_ADD": 354,
+    "EFX_SRL8": 6,
+    "EFX_RAM10": 75,
+    "EFX_DPRAM10": 82,
+    "BRAM_total": 157
+  },
+  "internal_timing": {
+    "target_mhz": 100,
+    "setup_slack_ns": 1.812,
+    "hold_slack_ns": 0.031,
+    "board_io_constrained": false
+  },
+  "tests": {
+    "core_rtl": {
+      "log": "build/sim/unit.log",
+      "sha256": "4c50beeb63eaaa08a05e2bfa0f9ca4c6d3956930c1baeb9786fad8c3c1e1f92b",
+      "summary": "PASS: 141 cases, 192 commands, 30452 cycles",
+      "cases": 141,
+      "commands": 192,
+      "cycles": 30452,
+      "expected_error_commands": 9
+    },
+    "bus_rtl": {
+      "log": "build/sim/bus.log",
+      "sha256": "0cb3990f7920735433615b893e3909ef61d91e35f330394d466b2ab7cbc74ed7",
+      "summary": "PASS bus: PW/DW golden, staging, backpressure, generic/fast DW reset, bank2 row masks, invalid address isolation"
+    },
+    "model_assets_rtl": {
+      "log": "build/sim/assets.log",
+      "sha256": "e596b4bc22e4edfa4f66d884012bd289b559948b3b82d5100a79160c05eb83a6",
+      "summary": "PASS assets: 22016 native ROM words, stop-read hold, 4096 Tanh addresses, backpressure, extremes and ties"
+    },
+    "model_bus_rtl": {
+      "log": "build/sim/model_bus.log",
+      "sha256": "3fc0860555222af8a1258213135982f6abbfb0ca61131af3b545fe54a1fd2f63",
+      "summary": "PASS epoch11 bus: fixed ROM DW/PW/BN/CONV-Tanh/ADD, third bank, extended parameters; 634 cycles"
+    },
+    "model_bus_mapped": {
+      "log": "build/sim/model_postmap.log",
+      "sha256": "3fc0860555222af8a1258213135982f6abbfb0ca61131af3b545fe54a1fd2f63",
+      "summary": "PASS epoch11 bus: fixed ROM DW/PW/BN/CONV-Tanh/ADD, third bank, extended parameters; 634 cycles"
+    },
+    "postprocess_rtl": {
+      "log": "build/sim/postprocess.log",
+      "sha256": "d44175002790d328cfbcc6c4e2e9feaf5df0f57b34801820f9054093437ce39a",
+      "summary": "PASS parallel postprocess: 205800 pixels, signed16 exhaustive, signed32 extremes, partial pooling and reset"
+    },
+    "dsp_primitive_probe": {
+      "log": "build/sim/dsp_quant_probe.log",
+      "sha256": "31924e0251f2cb66b2d4df7b87439c8d0e9fe2cff670379e8f96f6dc2da51b41",
+      "summary": "PASS W feedback: raw sum512, shifted output2, shift0 restores raw output512"
+    },
+    "fast_dw_windows": {
+      "log": "build/sim/dw_fast3.log",
+      "sha256": "5e4d778c465722e6660bc8dffd975243574a45b18fcd7ef2c83edf6a570bed84",
+      "summary": "PASS fast3 windows: 86400 pixels, 96 consecutive nine-MAC sequences, all edge masks and zero/reflect padding"
+    },
+    "fast_dw_cadence": {
+      "log": "build/sim/fast_unit.log",
+      "sha256": "5db3208c4d9f925a95605af5725ff7de8e6fe995f42495cf36f8a039159001a9",
+      "summary": "PASS: 141 cases, 32 commands, 1635 cycles",
+      "scope": "Case labels 110..141; 32 commands, each checked for nine ordered consecutive PE acceptances"
+    },
+    "executor_timing": {
+      "log": "build/sim/fast_timing.log",
+      "sha256": "458651cc805de603cf6420fa4bf52b8198dd68f99e91d774780d4f1100115ee9",
+      "summary": "PASS: 84 cases, 5 commands, 127 cycles",
+      "scope": "Case label 62: unpadded DW; label 84: four queued PW commands"
+    }
+  },
+  "full_network_instruction_model": [
+    {
+      "validation": "full encoded-instruction integer model; not RTL or FPGA",
+      "checkpoint_sha256": "7d6aaac3a6192dddde81602e6120d1aa4dc732690efb8c908cb4757e12dc9a8b",
+      "counts": {
+        "row_writes": 197400,
+        "DW": 8064,
+        "PW": 14208,
+        "NORM": 28416,
+        "tile_reads": 24960,
+        "tile_writes": 111328,
+        "ADD": 3456,
+        "CONV": 116736
+      },
+      "layers_checked": 16,
+      "final_values_checked": 230400,
+      "all_layers_equal": true,
+      "feature_storage": "host memory",
+      "cache_reserved_window_addresses": [
+        1487,
+        1535
+      ],
+      "input": "test.jpg"
+    },
+    {
+      "validation": "full encoded-instruction integer model; not RTL or FPGA",
+      "checkpoint_sha256": "7d6aaac3a6192dddde81602e6120d1aa4dc732690efb8c908cb4757e12dc9a8b",
+      "counts": {
+        "row_writes": 197400,
+        "DW": 8064,
+        "PW": 14208,
+        "NORM": 28416,
+        "tile_reads": 24960,
+        "tile_writes": 111328,
+        "ADD": 3456,
+        "CONV": 116736
+      },
+      "layers_checked": 16,
+      "final_values_checked": 230400,
+      "all_layers_equal": true,
+      "feature_storage": "host memory",
+      "cache_reserved_window_addresses": [
+        1487,
+        1535
+      ],
+      "input": "inverted test.jpg"
+    }
+  ],
+  "executor_timing": {
+    "dw_pop": 44,
+    "dw_mac_cycle_and_tap": [
+      [
+        47,
+        4
+      ],
+      [
+        48,
+        1
+      ],
+      [
+        49,
+        7
+      ],
+      [
+        50,
+        3
+      ],
+      [
+        51,
+        5
+      ],
+      [
+        52,
+        0
+      ],
+      [
+        53,
+        2
+      ],
+      [
+        54,
+        6
+      ],
+      [
+        55,
+        8
+      ]
+    ],
+    "dw_done": 61,
+    "pw_queued_pops": [
+      78,
+      88,
+      98,
+      108
+    ],
+    "pw_dones": [
+      87,
+      97,
+      107,
+      117
+    ],
+    "execution_cycles": [
+      17,
+      9,
+      9,
+      9,
+      9
+    ],
+    "queued_switch_cycles": 1
+  },
+  "host_protocol": {
+    "row_commits_checked": 70,
+    "addresses_checked": 7,
+    "scope": "Python protocol model; separate RTL bus tests"
+  },
+  "limitations": [
+    "host keeps full feature maps and interleaves transpose phases",
+    "no board transport, DDR DMA or autonomous FPGA layer scheduler",
+    "no full-frame RTL simulation or on-board inference validation"
+  ],
+  "rtl_sha256": {
+    "rtl/cyclegan_bus_top.sv": "4f5bd6ba405af202f8e91905cd10ef472a42cade8b05424db5582b856966d201",
+    "rtl/mn_cache.sv": "395af25c61bcb1a23c005ce69d71cf23f772defdd09d6f6919200de6e1c3ce17",
+    "rtl/mn_dw_fast3.sv": "8751a52ea88de123b4bb58540b279220f94bdb2ea8bcf16aaf91ba48f84d3071",
+    "rtl/mn_dw_windows.sv": "790006a685fb053f29b9f4d36d4d5c51be83ccee6559c4c23bf37c07dcf88413",
+    "rtl/mn_instruction_fifo.sv": "345cc852eb75bdc8daa268a258c9bedef4e8e8fca290fbe372111c10e7eb65de",
+    "rtl/mn_model_rom.sv": "6fa4f14da9d46980ad3d23d5084769368abead0f279d007afa141ebba216019e",
+    "rtl/mn_param_ram.sv": "d372d31db182b38b5b8c3a29ec6b0879f3e7b8057e96465089b4e05c22c4b742",
+    "rtl/mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+    "rtl/mn_postprocess.sv": "d957ab8cb1181f08fd72bb39afebc49c2b0f1f15570bcce289d1370bc33e7401",
+    "rtl/mn_tanh.sv": "cfe943c791c915ff62720ab9efbb52706a33661b0b81d01746bed5860e080764",
+    "rtl/mobilenet_bus_top.sv": "a09124df5239820d7520c30c96fbb46b19ebbc2fd2d86d565e236904f206340d",
+    "rtl/mobilenet_unit.sv": "5c7042b15f36fdeb1533930f6087f898a690544b84ec0931b84a9b75e95a7149",
+    "rtl/mn_isa.vh": "a10e107fc2ecaed335599d7abbf9996f4e00f8eba809b0e94a453d9bb4af9843",
+    "rtl/mn_model_params_init.vh": "a5ed47a992edde66a0a482a74b67b3f9e7b36159df70a628ceaea2d01e3c16fc",
+    "rtl/mn_tanh_u8.mem": "7584e60281f74b0d8744f56b3e1c902bc22ace91150b64791d49bd2c248a4478"
+  },
+  "report_sha256": {
+    "mobilenet.map.rpt": "17c672740561dc270211ea5424f0d6f55d6ae9127f3251a5e097ccd215e9a641",
+    "mobilenet.timing.rpt": "9626b15cf5d71cecece1863f6366ed537d67b5a050838541f6d376605d66a857",
+    "mobilenet.place.rpt": "098e6be0b83ab2252a3dda73162c0893a1c69f456982658be72eb7dd0361f04b"
+  }
+}
