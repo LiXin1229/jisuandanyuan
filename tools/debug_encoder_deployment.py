@@ -14,7 +14,7 @@ from efx_dbg.jtag import JtagManager
 from pyftdi.bits import BitSequence
 
 class Board:
- def __init__(self,project,url,freq):
+ def __init__(self,project,url,freq,signature=0xe311):
   self.manager=JtagManager();self.jtag=self.manager.config_jtag(url=url,tap='efx_ti',user='USER1',freq=freq)
   # Efinity uses PyFtdi's 16 ms default. Small acknowledged VIO transfers
   # benefit from its supported 1 ms USB latency setting; restore on close.
@@ -24,9 +24,9 @@ class Board:
   profile,_=DebugProfileBuilder.from_file(str(project/'debug_profile.json'))
   self.debug=self.manager.config_debug(self.jtag,profile);self.manager.validate_debug_cores(self.debug)
   s=self.read()
-  if s['status']>>16!=0xe311:raise RuntimeError(f'Unexpected stage-1 image: {s["status"]:08x}')
+  if s['status']>>16!=signature:raise RuntimeError(f'Unexpected image: {s["status"]:08x}, expected {signature:04x}')
   self.toggle=(s['status']>>8)&1;self.payload=0
-  print('STAGE1_JTAG_CONNECTED',hex(s['status']),flush=True)
+  print(f'STAGE{2 if signature==0xe312 else 1}_JTAG_CONNECTED',hex(s['status']),flush=True)
  def read(self):
   v=[int(x) for x in self.manager.read_vio(self.debug,'vio0')]
   return dict(status=v[0],cycles=v[1],busy_cycles=v[2],first_output=v[3],frames=v[4]>>16,

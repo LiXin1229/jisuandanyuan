@@ -55,9 +55,10 @@ def assets():
             (dest/f'stage{i}_tiles.mem').write_text(''.join(f'{int.from_bytes(t,"little"):0200x}\n' for t in tiles))
     print('STAGE1_ASSETS_PASS 1067 exact parameters, 3 ROM BRAM, two reference frames')
 
-def board(dest):
+def board(dest,residual=False):
     dest=dest.resolve();dest.mkdir(parents=True,exist_ok=True)
-    for name in SOURCES+['mn_isa.vh','mn_model_params_init.vh','mn_tanh_u8.mem']:
+    sources=SOURCES+(['mn_residual_rom.sv','cyclegan_residual_scheduler.sv'] if residual else [])
+    for name in sources+['mn_isa.vh','mn_model_params_init.vh','mn_tanh_u8.mem']:
         shutil.copy2(ROOT/'rtl'/name,dest/name)
     (dest/'rtl').mkdir(exist_ok=True)
     shutil.copy2(ROOT/'rtl/mn_tanh_u8.mem',dest/'rtl/mn_tanh_u8.mem')
@@ -75,12 +76,63 @@ def board(dest):
     text=text.replace('  .result_valid(),.result_ready(1\'b1),.result_stage(),.result_channel(),.result_x(),.result_y(),.result_data(),',
                       '  .command_wait_cycles(command_wait_cycles),.data_wait_cycles(data_wait_cycles),.input_checksum(input_checksum),')
     text=text.replace('.vio0_command(command),', '.vio0_command_wait_cycles(command_wait_cycles),.vio0_data_wait_cycles(data_wait_cycles),.vio0_input_checksum(input_checksum),\n  .vio0_command(command),')
+    if residual:
+        text=text.replace("16'he311","16'he312")
+        # Stage-2 board profile: retain calibration, then use the verified
+        # sampling phase. Command 5 bit3 permits same-bitstream phase A/B tests.
+        text=text.replace(' wire enable=cal_done && cal_pass;',
+            ' wire [2:0] auto_shift;wire auto_shift_ena;\n'
+            ' reg [2:0] phase_value=6;reg phase_applied=0,phase_change=0;\n'
+            ' assign shift=cal_done ? phase_value : auto_shift;\n'
+            ' assign shift_ena=auto_shift_ena || (cal_done && !phase_applied) || phase_change;\n'
+            ' wire enable=cal_done && cal_pass && phase_applied;')
+        text=text.replace('.shift(shift),.shift_sel(),.shift_ena(shift_ena),', '.shift(auto_shift),.shift_sel(),.shift_ena(auto_shift_ena),')
+        text=text.replace('  begin_frame<=0;acquire<=0;release_frame<=0;',
+            '  begin_frame<=0;acquire<=0;release_frame<=0;phase_change<=0;phase_applied<=cal_done;')
+        text=text.replace('   ack<=0;', '   phase_value<=6;phase_applied<=0;\n   ack<=0;')
+        text=text.replace('5:begin protocol_error<=0;',
+            '5:begin if(command[3]) begin phase_value<=command[2:0];phase_change<=1;end protocol_error<=0;')
+        text=text.replace('.vio0_calibration({22\'d0,cal_shift,cal_log})',
+            '.vio0_calibration({18\'d0,phase_applied,phase_value,cal_shift,cal_log})')
+        text=text.replace('cyclegan_encoder u_core','cyclegan_encoder #(.RESIDUAL_ENABLE(1)) u_core')
+        text=text.replace(' reg run_toggle=0,debug_toggle=0,debug_ddr=0;',
+            ' reg run_toggle=0,debug_toggle=0,debug_ddr=0,resume_toggle=0,pause_mode=0;\n'
+            ' reg resume_s1=0,resume_s2=0,resume_seen=0,core_resume=0,paused_s1=0,paused_s2=0;\n'
+            ' wire paused;wire [3:0] blocks_completed;wire [10:0] residual_output_base;\n'
+            ' wire [31:0] encoder_cycles,residual_cycles,block_cycles;')
+        text=text.replace('  .raw_rows(),',
+            '  .pause_each_block(pause_mode),.resume(core_resume),.paused(paused),.blocks_completed(blocks_completed),\n'
+            '  .residual_output_base(residual_output_base),.encoder_cycles(encoder_cycles),\n'
+            '  .residual_cycles(residual_cycles),.block_cycles(block_cycles),\n  .raw_rows(),')
+        text=text.replace('  core_start<=0;core_dbg_rd<=0;', '  core_start<=0;core_dbg_rd<=0;core_resume<=0;')
+        text=text.replace('   run_s1<=0;', '   resume_s1<=0;resume_s2<=0;resume_seen<=0;\n   run_s1<=0;')
+        text=text.replace('   run_s1<=run_toggle;',
+            '   resume_s1<=resume_toggle;resume_s2<=resume_s1;\n'
+            '   if(resume_s2!=resume_seen) begin resume_seen<=resume_s2;core_resume<=1;end\n   run_s1<=run_toggle;')
+        text=text.replace('   ack<=0;', '   paused_s1<=0;paused_s2<=0;resume_toggle<=0;pause_mode<=0;\n   ack<=0;')
+        text=text.replace('   done_s1<=complete_toggle;', '   paused_s1<=paused;paused_s2<=paused_s1;\n   done_s1<=complete_toggle;')
+        text=text.replace('3:if(!running && (slots[1:0]==2 || slots[3:2]==2)) acquire<=1;',
+            '3:if(!running && (slots[1:0]==2 || slots[3:2]==2)) begin acquire<=1;pause_mode<=command[0];end')
+        text=text.replace('4,6:if(!running)', '4,6:if(!running || (command[30:28]==4 && paused_s2))')
+        text=text.replace('     default:begin protocol_error',
+            '     7:begin if(running && paused_s2) resume_toggle<=~resume_toggle;else protocol_error<=1;ack<=command[31];pending<=0;end\n'
+            '     default:begin protocol_error')
+        text=text.replace('  .vio0_command(command),',
+            '  .vio0_residual_status({16\'d0,residual_output_base,blocks_completed,paused_s2}),\n'
+            '  .vio0_encoder_cycles(encoder_cycles),.vio0_residual_cycles(residual_cycles),.vio0_block_cycles(block_cycles),\n'
+            '  .vio0_command(command),')
+        for fragment in ('7:begin if(running && paused_s2)', '.resume(core_resume)',
+                         'phase_change<=1;', '.RESIDUAL_ENABLE(1)', '.vio0_residual_status('):
+            assert text.count(fragment)==1,('Board template expansion failed',fragment)
     (dest/'cyclegan_encoder_board.v').write_text('// Derived from pe10_10/encoder/rtl/encoder_board.v; current compute unit.\n'+text,encoding='utf8')
     profile=json.loads((REF/'project/encoder_board/debug_profile.json').read_text())
-    core=profile['debug_cores'][0];core['uuid']='e311a571b2ce4108af3e1b2833228701'
+    core=profile['debug_cores'][0];core['uuid']=('e312' if residual else 'e311')+'a571b2ce4108af3e1b2833228701'
     # Inputs are listed first so host readback indices stay stable.
     probes=core['probes'];idx=next(i for i,p in enumerate(probes) if p['name']=='command')
     probes[idx:idx]=[dict(name='command_wait_cycles',width=32,init=None),dict(name='data_wait_cycles',width=32,init=None),dict(name='input_checksum',width=32,init=None)]
+    if residual:
+        idx=next(i for i,p in enumerate(probes) if p['name']=='command')
+        probes[idx:idx]=[dict(name=name,width=32,init=None) for name in ('residual_status','encoder_cycles','residual_cycles','block_cycles')]
     (dest/'debug_profile.json').write_text(json.dumps(profile,indent=2))
     efx=Path(os.environ.get('EFINITY_HOME',r'D:\Efinity\2026.1'));sys.path.insert(0,str(efx/'debugger/bin'))
     from efx_dbg.define import DebugProfileBuilder
@@ -94,7 +146,7 @@ def board(dest):
     for e in list(design):
         if e.tag in (f'{{{ns}}}design_file',f'{{{ns}}}top_module'):design.remove(e)
     design.insert(0,ET.Element(f'{{{ns}}}top_module',name='cyclegan_encoder_board'))
-    for idx,source in enumerate(SOURCES+['frame_pingpong.v','AXI4_AWARMux.v','cyclegan_encoder_board.v','DdrCtrl/DdrCtrl.v','debug_top.v']):
+    for idx,source in enumerate(sources+['frame_pingpong.v','AXI4_AWARMux.v','cyclegan_encoder_board.v','DdrCtrl/DdrCtrl.v','debug_top.v']):
         design.insert(idx+1,ET.Element(f'{{{ns}}}design_file',name=source,version='default',library='default'))
     syn=p.find(f'{{{ns}}}synthesis')
     for e in list(syn):
@@ -112,7 +164,7 @@ def board(dest):
     from api_service.design import DesignAPI
     api=DesignAPI();api.load(str(dest/'encoder_board.peri.xml'));api.generate(True,str(dest/'outflow'))
     if not (dest/'outflow/encoder_board.lpf').exists():raise RuntimeError('Interface generation failed')
-    manifest={name:hashlib.sha256((ROOT/'rtl'/name).read_bytes()).hexdigest() for name in SOURCES}
+    manifest={name:hashlib.sha256((ROOT/'rtl'/name).read_bytes()).hexdigest() for name in sources}
     (dest/'source_manifest.json').write_text(json.dumps(dict(clock_hz=150000000,rtl_sha256=manifest),indent=2))
     print('STAGE1_BOARD_READY',dest)
 

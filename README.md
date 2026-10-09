@@ -2,9 +2,9 @@
 
 目标器件 Ti60 F225，Efinity 2026.1；100 路 DSP、10×10 tile、signed8 Q4.4 数据和 signed16 Q8.8 参数。
 
-本次四阶段板级迭代已完成第一阶段：FPGA 自主完成 RGB 输入至残差前的三层编码，输出 32×30×40。两次下载、六帧的输入 CRC32 与全部 230400 个特征值回读均通过；连续供指令，指令供应等待为零。完整 DDR/JTAG 板级网表为 **198 BRAM、17304 LUT4、11967 FF、100 DSP**，150 MHz setup/hold 余量 **0.937/0.035 ns**，单帧约 **5.71 ms**。按列预取候选暂时关闭，采用整行释放和安全行槽后台装载。残差、转置卷积及 7×7 输出三个阶段尚未完成板级部署。详见 [第一阶段实现及验证](docs/cyclegan_stage1_deployment.md) 和 [机器证据](docs/analysis/cyclegan_stage1_deployment.json)。
+本次四阶段板级迭代已完成编码和九个残差块：FPGA 自主执行 RGB 输入至残差末尾，输出 32×30×40，复用同一计算单元和片上缓存。两次下载后的六帧验收通过：四帧逐块回读、两帧无暂停连续运行，共 **1459200 个值零差异**，输入 CRC32 全部匹配，指令供应等待为零。九块残差 **2.9493 ms**，含编码的前缀约 **8.66 ms**。完整 DDR/JTAG 板级网表为 **211 BRAM、18078 LUT4、12592 FF、100 DSP**，150 MHz setup/hold 余量 **0.955/0.026 ns**。本板 DDR 采用经过同一位流相位对照验证的相位 6。转置卷积和 7×7 输出两个阶段尚未完成板级部署。详见 [第二阶段实现及验证](docs/cyclegan_stage2_deployment.md)、[机器证据](docs/analysis/cyclegan_stage2_deployment.json) 和 [第一阶段记录](docs/cyclegan_stage1_deployment.md)。
 
-当前版本支持 `netG_B_epoch11.pth` 的 7×7 输出生成器，采用 checkpoint 的固定 BN 统计生成 affine 参数。整网调度在主机端运行，编码、残差、四相转置卷积和 Tanh 复用同一计算单元。核心及全部缓存/模型参数/Tanh 综合为 **195 BRAM、15807 LUT4、4026 FF、100 DSP**（当前 BRAM 预算约 200）；**150 MHz** 内部时序通过布局布线检查，setup / hold 余量 **0.725 / 0.026 ns**。本轮采用 BRAM 与工作窗口同步初始化的折中方案，仅增加 **1124 LUT**：3×3 / 7×7 DW 仍连续发射 9 / 49 次 MAC，无填充执行时间从 77 / 117 降到 **52 / 92 拍**，150 MHz 下约 **347 / 613 ns**。PW 无舍入仍为 `Cin+8` 拍；需要修补的边每个增加 9 拍，排队弹出间隔在执行时间基础上加 1 拍。
+完整模型总线版（此前实现）支持 `netG_B_epoch11.pth` 的 7×7 输出生成器，采用 checkpoint 的固定 BN 统计生成 affine 参数。整网调度在主机端运行，编码、残差、四相转置卷积和 Tanh 复用同一计算单元。核心及全部缓存/模型参数/Tanh 综合为 **195 BRAM、15807 LUT4、4026 FF、100 DSP**（核心历史预算约 200，不包含 DDR/JTAG 板级壳）；**150 MHz** 内部时序通过布局布线检查，setup / hold 余量 **0.725 / 0.026 ns**。本轮采用 BRAM 与工作窗口同步初始化的折中方案，仅增加 **1124 LUT**：3×3 / 7×7 DW 仍连续发射 9 / 49 次 MAC，无填充执行时间从 77 / 117 降到 **52 / 92 拍**，150 MHz 下约 **347 / 613 ns**。PW 无舍入仍为 `Cin+8` 拍；需要修补的边每个增加 9 拍，排队弹出间隔在执行时间基础上加 1 拍。
 
 - [当前 BRAM 与工作窗口同步初始化的折中优化](docs/window_latency_iteration10.md)
 - [第九轮 150 MHz 时序与参数 ROM 优化](docs/timing_optimization_iteration9.md)
@@ -46,4 +46,4 @@ $modelPython='C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime
 
 RTL 仿真使用 Icarus Verilog。综合脚本为 Efinity 建立 ASCII 路径副本，报告复制到 `build/efinity/outflow`；默认时钟为 150 MHz。`run_pnr.ps1` 会检查 setup 和 hold，任一负余量都报错。独立时序对照可用 `run_timing_sweep.ps1 -Frequencies 150,200`，结果保存在 `build/timing`，不覆盖生产报告。默认 `run_synthesis.ps1` 仍综合可写参数顶层；其综合网表测试用 `run_postmap_sim.ps1`。固定模型综合网表测试用 `run_cyclegan_checks.ps1`。
 
-板上使用时，实现遵守 ready/rvalid 的 `write_word/read_word` 传输适配器，再将 `BusCore` 交给 `GeneratorScheduler`。目前没有实际板级传输适配器、DDR DMA 或自主 FPGA 网络控制器，脚本不会烧录 FPGA；整网验证为整数指令模型，未完成整帧 RTL 或板上验证。
+板上使用时，实现遵守 ready/rvalid 的 `write_word/read_word` 传输适配器，再将 `BusCore` 交给 `GeneratorScheduler`。当前已有官方 JTAG 上传/回读、DDR 输入帧缓冲和自主 FPGA 编码/残差调度器，可通过 `scripts/run_residual_board.ps1 -Program -RepeatBoot -PhaseControl` 构建、烧录并验证。完整生成器的转置卷积及 7×7 输出仍使用整数指令模型验证，尚未接入自主板级前缀。

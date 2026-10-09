@@ -12,7 +12,8 @@ module tb_cyclegan_encoder;
  reg [127:0] memory[0:19199];reg [799:0] gold0[0:1535],gold1[0:767],gold2[0:383];reg [799:0] expected;
  string vectors;
  assign req_ready=!pending && !rsp_valid && ticks%7!=0;
- cyclegan_encoder dut(.*,.frame_base(32'd0));
+ cyclegan_encoder dut(.*,.frame_base(32'd0),.pause_each_block(1'b0),.resume(1'b0),
+  .paused(),.blocks_completed(),.residual_output_base(),.encoder_cycles(),.residual_cycles(),.block_cycles());
  always @(posedge clk) if(rstn) begin
   ticks<=ticks+1;
   if($test$plusargs("debug") && (ticks<40 || ticks%1000==0))

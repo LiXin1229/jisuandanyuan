@@ -1,5 +1,5 @@
 `include "mn_isa.vh"
-module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=0) (
+module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=0, RESIDUAL_PREFIX=0) (
     input wire clk,reset,
     input wire [127:0] instruction,
     input wire instruction_valid,
@@ -34,7 +34,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     wire [14:0] param_base={cmd[94:92],cmd[35:24]};
     wire ring_enable=cmd[95];
     wire [10:0] top_src=cmd[106:96],bottom_src=cmd[117:107];
-    wire tanh_enable=!ENCODER_ONLY && cmd[118];
+    wire tanh_enable=!(ENCODER_ONLY || RESIDUAL_PREFIX) && cmd[118];
     wire spatial=opcode==`MN_OP_DW || opcode==`MN_OP_CONV;
     wire continuation=opcode==`MN_OP_PW || opcode==`MN_OP_CONV;
     wire [5:0] channels={1'b0,cmd[40:36]}+6'd1;
@@ -197,7 +197,9 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     wire [15:0] param_data;
     wire param_valid;
     generate if(MODEL_PARAMS) begin: model_parameters
-        if(ENCODER_ONLY) begin: encoder_rom
+        if(RESIDUAL_PREFIX) begin: residual_rom
+            mn_residual_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
+        end else if(ENCODER_ONLY) begin: encoder_rom
             mn_encoder_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
         end else begin: full_rom
             mn_model_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
@@ -277,8 +279,9 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     wire bad_padding=spatial && edges!=0 && (pad_kind==`MN_PAD_NONE || pad_width==0 || pad_width==2 || (kernel==4 && pad_width<3));
     wire bad_command=opcode>`MN_OP_ADD || activation==3 || write_mode>4 || cmd[61:58]>9 || cmd[65:62]>9 || cmd[127:119]!=0 ||
         (opcode!=`MN_OP_NOP && (src_base>=WINDOW_BASE || dst_base>=WINDOW_BASE)) || (opcode==`MN_OP_PW && pw_end>WINDOW_BASE) ||
-        (opcode==`MN_OP_ADD ? param_base>=WINDOW_BASE : opcode!=`MN_OP_NOP && param_end>(MODEL_PARAMS ? (ENCODER_ONLY ? 1067 : 21603) : 4096)) ||
+        (opcode==`MN_OP_ADD ? param_base>=WINDOW_BASE : opcode!=`MN_OP_NOP && param_end>(MODEL_PARAMS ? (RESIDUAL_PREFIX ? 14027 : ENCODER_ONLY ? 1067 : 21603) : 4096)) ||
         (ENCODER_ONLY && (opcode>`MN_OP_NOP || cmd[118])) ||
+        (RESIDUAL_PREFIX && cmd[118]) ||
         (spatial && (kernel>5 || channels!=1 || tile_pitch==0 || row_pitch==0 || pad_kind==3)) ||
         ((pool_enable || stride2) && write_mode==0) || (pool_enable && stride2) || (opcode==`MN_OP_NORM && channels!=1) || bad_padding ||
         (keep_acc && (!continuation || !acc_live || acc_dst!=dst_base || acc_round!=rounding)) ||
