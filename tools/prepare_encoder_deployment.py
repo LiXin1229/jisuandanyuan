@@ -55,10 +55,13 @@ def assets():
             (dest/f'stage{i}_tiles.mem').write_text(''.join(f'{int.from_bytes(t,"little"):0200x}\n' for t in tiles))
     print('STAGE1_ASSETS_PASS 1067 exact parameters, 3 ROM BRAM, two reference frames')
 
-def board(dest,residual=False,decoder=False):
+def board(dest,residual=False,decoder=False,output=False):
     dest=dest.resolve();dest.mkdir(parents=True,exist_ok=True)
     sources=SOURCES+(['mn_residual_rom.sv','cyclegan_residual_scheduler.sv'] if residual else [])
     if decoder:sources+=['mn_decoder_rom.sv','cyclegan_decoder_scheduler.sv','cyclegan_feature_writer.sv','cyclegan_write_arbiter.sv']
+    if output:
+        assert decoder and residual
+        sources+=['mn_generator_rom.sv']
     for name in sources+['mn_isa.vh','mn_model_params_init.vh','mn_tanh_u8.mem']:
         shutil.copy2(ROOT/'rtl'/name,dest/name)
     (dest/'rtl').mkdir(exist_ok=True)
@@ -193,9 +196,17 @@ def board(dest,residual=False,decoder=False):
         text=text.replace('bridge_fault,core_fault,running,ack','bridge_fault,(core_fault|writer_fault),running,ack')
         for fragment in ('u_writer(', 'u_write_arbiter(', '.feature_write_data(feature_write_data)', '13:statistic_word='):
             assert text.count(fragment)==1,fragment
+    if output:
+        text=text.replace("16'he314","16'he315").replace('.DECODER_ENABLE(1)', '.DECODER_ENABLE(1),.OUTPUT_ENABLE(1)')
+        text=text.replace('wire [1:0] layers_completed;', 'wire [1:0] layers_completed;wire output_completed;wire [31:0] output_cycles;')
+        text=text.replace('.decoder_cycles(decoder_cycles),', '.output_completed(output_completed),.output_cycles(output_cycles),.decoder_cycles(decoder_cycles),')
+        text=text.replace('case(debug_address[3:0])','case(debug_address[4:0])')
+        text=text.replace('   default:statistic_word=0;', "   16:statistic_word=output_cycles;17:statistic_word={31'd0,output_completed};\n   default:statistic_word=0;")
+        for fragment in ('.OUTPUT_ENABLE(1)', '.output_cycles(output_cycles)', '16:statistic_word=output_cycles;'):
+            assert text.count(fragment)==1,fragment
     (dest/'cyclegan_encoder_board.v').write_text('// Derived from pe10_10/encoder/rtl/encoder_board.v; current compute unit.\n'+text,encoding='utf8')
     profile=json.loads((REF/'project/encoder_board/debug_profile.json').read_text())
-    core=profile['debug_cores'][0];core['uuid']=('e314' if decoder else 'e313' if residual else 'e311')+'a571b2ce4108af3e1b2833228701'
+    core=profile['debug_cores'][0];core['uuid']=('e315' if output else 'e314' if decoder else 'e313' if residual else 'e311')+'a571b2ce4108af3e1b2833228701'
     # Inputs are listed first so host readback indices stay stable.
     probes=core['probes'];idx=next(i for i,p in enumerate(probes) if p['name']=='command')
     probes[idx:idx]=[dict(name='command_wait_cycles',width=32,init=None),dict(name='data_wait_cycles',width=32,init=None),dict(name='input_checksum',width=32,init=None)]

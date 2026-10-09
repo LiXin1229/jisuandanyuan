@@ -1,5 +1,5 @@
 `include "mn_isa.vh"
-module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=0, RESIDUAL_PREFIX=0, DECODER_PREFIX=0, STREAM_READS=0) (
+module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=0, RESIDUAL_PREFIX=0, DECODER_PREFIX=0, STREAM_READS=0, GENERATOR_ROM=0) (
     input wire clk,reset,
     input wire [127:0] instruction,
     input wire instruction_valid,
@@ -199,7 +199,9 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     wire [15:0] param_data;
     wire param_valid;
     generate if(MODEL_PARAMS) begin: model_parameters
-        if(DECODER_PREFIX) begin: decoder_rom
+        if(GENERATOR_ROM) begin: generator_rom
+            mn_generator_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
+        end else if(DECODER_PREFIX) begin: decoder_rom
             mn_decoder_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
         end else if(RESIDUAL_PREFIX) begin: residual_rom
             mn_residual_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));

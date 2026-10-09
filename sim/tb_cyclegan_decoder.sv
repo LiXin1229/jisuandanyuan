@@ -31,7 +31,7 @@ module tb_cyclegan_decoder #(parameter FULL_PREFIX=0);
  assign wready=write_pending && dticks%5!=0;
  assign arready=!read_pending && !rvalid && dticks%11!=0;
  generate if(!FULL_PREFIX) begin:g_seeded
- cyclegan_decoder_scheduler scheduler(.*,.frame_start(1'b0),.writeback_valid(wb_valid),.writeback_addr(wb_addr),.writeback_opcode(wb_opcode));
+ cyclegan_decoder_scheduler scheduler(.*,.output_completed(),.output_cycles(),.frame_start(1'b0),.writeback_valid(wb_valid),.writeback_addr(wb_addr),.writeback_opcode(wb_opcode));
  mobilenet_unit #(.MODEL_PARAMS(1),.DECODER_PREFIX(1),.STREAM_WRITES(1),.STREAM_READS(1)) unit(
   .clk(clk),.reset(!rstn),.instruction(instruction),.instruction_valid(instruction_valid),.instruction_ready(instruction_ready),.instruction_count(queued),
   .host_cache_wr(seed_wr || cache_wr),.host_cache_waddr(seed_wr ? seed_addr : cache_waddr),

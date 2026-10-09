@@ -2,12 +2,13 @@
 // Three stride-2 transposed convolutions. Four CONV phases use the existing
 // accumulator, then the original NORM/ReLU quantization. Two phase slots let
 // cache interleaving and DDR writes overlap the next output channel.
-module cyclegan_decoder_scheduler(
+module cyclegan_decoder_scheduler #(parameter OUTPUT_ENABLE=0)(
  input wire clk,rstn,frame_start,start,pause_each_layer,resume,
  output reg [127:0] instruction,output wire instruction_valid,input wire instruction_ready,
  input wire core_busy,memory_ready,input wire [2:0] queued,
  input wire writeback_valid,input wire [10:0] writeback_addr,input wire [3:0] writeback_opcode,
  output reg done,output wire paused,output reg [1:0] layers_completed,
+ output reg output_completed,output wire [31:0] output_cycles,
  output reg [31:0] cycles,layer_cycles,command_wait_cycles,data_wait_cycles,
  output wire req_valid,input wire req_ready,output wire [31:0] req_addr,output wire [2:0] req_beats,
  input wire rsp_valid,output wire rsp_ready,input wire [511:0] rsp_data,
@@ -18,34 +19,39 @@ module cyclegan_decoder_scheduler(
 );
  localparam IDLE=0,RUN=1,DRAIN=2,PAUSE=3,NEXT=4;
  reg [2:0] state;reg [1:0] layer,phase;
- reg [4:0] ch,co,x;reg [3:0] y;
+ reg [4:0] ch,co,x,y;
  reg norm;
  reg [1:0] owned,ready_slots;
- reg [3:0] consumed_rows;
+ reg [4:0] consumed_rows;
+ wire output_mode=OUTPUT_ENABLE && layer==3;
  wire [5:0] cin=layer==0 ? 32 : layer==1 ? 16 : 8;
- wire [4:0] cout=layer==0 ? 16 : 8;
- wire [4:0] width=layer==0 ? 4 : layer==1 ? 8 : 16;
- wire [3:0] height=layer==0 ? 3 : layer==1 ? 6 : 12;
- wire [14:0] weights=layer==0 ? 14027 : layer==1 ? 18667 : 19835;
+ wire [4:0] cout=output_mode ? 3 : layer==0 ? 16 : 8;
+ wire [5:0] width=output_mode ? 32 : layer==0 ? 4 : layer==1 ? 8 : 16;
+ wire [4:0] height=output_mode ? 24 : layer==0 ? 3 : layer==1 ? 6 : 12;
+ wire [14:0] weights=output_mode ? 20427 : layer==0 ? 14027 : layer==1 ? 18667 : 19835;
  wire [14:0] bn=layer==0 ? 18635 : layer==1 ? 19819 : 20411;
- wire [1:0] bank=y%4'd3;
- wire [1:0] bottom_bank=y==height-1 ? bank : bank==2 ? 0 : bank+2'd1;
+ wire [1:0] bank=output_mode ? y[1:0] : y%5'd3;
+ wire [1:0] top_bank=y==0 ? bank : bank-2'd1;
+ wire [1:0] bottom_bank=y==height-1 ? bank : output_mode ? bank+2'd1 : bank==2 ? 0 : bank+2'd1;
  wire [10:0] col_ch=layer==1 ? {2'd0,x,4'd0}+ch : {3'd0,x,3'd0}+ch;
- wire [10:0] src=layer==0 ? ({6'd0,ch}<<3)+({6'd0,ch}<<2)+{5'd0,y[1:0],x[1:0]} :
+ wire [10:0] src=output_mode ? {1'b0,bank,x,3'b0}+ch : layer==0 ? ({6'd0,ch}<<3)+({6'd0,ch}<<2)+{5'd0,y[1:0],x[1:0]} :
                                   11'd512+{2'd0,bank,7'd0}+col_ch;
- wire [10:0] dst=11'd1424+{8'd0,co[0],phase};
- wire [14:0] co_weights=layer==0 ? ({10'd0,co}<<8)+({10'd0,co}<<5) :
+ // Three RGB channels make co parity repeat at the next tile. Alternate
+ // by the complete job order so DDR writeback overlaps that tile as well.
+ wire job_slot=co[0] ^ (output_mode && x[0]);
+ wire [10:0] dst=11'd1424+{8'd0,job_slot,phase};
+ wire [14:0] co_weights=output_mode ? ({10'd0,co}<<8)+({10'd0,co}<<7)+({10'd0,co}<<3) : layer==0 ? ({10'd0,co}<<8)+({10'd0,co}<<5) :
                                   layer==1 ? ({10'd0,co}<<7)+({10'd0,co}<<4) : ({10'd0,co}<<6)+({10'd0,co}<<3);
  wire [14:0] phase_offset=phase==0 ? 0 : phase==1 ? cin : phase==2 ? (cin<<1)+cin : (cin<<2)+cin;
- wire [14:0] channel_offset=phase==0 ? ch : phase==3 ? {8'd0,ch,2'd0} : {9'd0,ch,1'b0};
+ wire [14:0] channel_offset=output_mode ? ({10'd0,ch}<<5)+({10'd0,ch}<<4)+ch : phase==0 ? ch : phase==3 ? {8'd0,ch,2'd0} : {9'd0,ch,1'b0};
  wire [14:0] parameter_addr=norm ? bn+{9'd0,co,1'b0} : weights+co_weights+phase_offset+channel_offset;
  wire starting_slot=phase==0 && ch==0 && !norm;
- reg [3:0] loaded_rows,load_y;
+ reg [4:0] loaded_rows,load_y;
  reg [4:0] load_x,load_ch;reg half;
  localparam L_IDLE=0,L_REQ=1,L_RSP=2;
  reg [1:0] load_state;
  wire rows_ready=layer==0 || loaded_rows>=(y==height-1 ? height : y+2);
- assign instruction_valid=state==RUN && rows_ready && (!starting_slot || !owned[co[0]]);
+ assign instruction_valid=state==RUN && rows_ready && (!starting_slot || !owned[job_slot]);
  assign paused=state==PAUSE;
  always @* begin
   instruction=0;
@@ -53,41 +59,47 @@ module cyclegan_decoder_scheduler(
   instruction[13:4]=norm ? dst[9:0] : src[9:0];instruction[90]=norm ? dst[10] : src[10];
   instruction[23:14]=dst[9:0];instruction[91]=dst[10];
   instruction[35:24]=parameter_addr[11:0];instruction[94:92]=parameter_addr[14:12];
-  instruction[43:41]=phase==0 ? 5 : phase==1 ? 0 : phase==2 ? 1 : 2;
+  instruction[43:41]=output_mode ? 4 : phase==0 ? 5 : phase==1 ? 0 : phase==2 ? 1 : 2;
   instruction[45:44]=norm ? 1 : 0;
-  instruction[51:50]=1;instruction[53:52]=1;
+  instruction[51:50]=output_mode ? 2 : 1;instruction[53:52]=output_mode ? 3 : 1;
   // All four phase kernels have a forward anchor (1x1,1x2,2x1,2x2).
   // Top/left window cells never enter a MAC. Zero these unused halos so
   // the previous ring row can be replaced while the current row computes.
-  instruction[57:54]={y==height-1,1'b1,x==width-1,1'b1};
+  instruction[57:54]={y==height-1,output_mode ? y==0 : 1'b1,x==width-1,output_mode ? x==0 : 1'b1};
   instruction[61:58]=9;instruction[65:62]=9;
   instruction[75:66]=layer==0 ? 1 : cin;
-  instruction[85:76]=layer==0 ? 4 : 128;
-  instruction[86]=1;instruction[87]=!norm && ch!=0;instruction[88]=!norm && ch!=cin-1;
+  instruction[85:76]=output_mode ? 256 : layer==0 ? 4 : 128;
+  instruction[86]=!output_mode;instruction[87]=!norm && ch!=0;instruction[88]=!norm && ch!=cin-1;
   instruction[95]=layer!=0;
-  instruction[106:96]=src;
-  instruction[117:107]=11'd512+{2'd0,bottom_bank,7'd0}+col_ch;
+  instruction[106:96]=output_mode ? {1'b0,top_bank,x,3'b0}+ch : src;
+  instruction[117:107]=output_mode ? {1'b0,bottom_bank,x,3'b0}+ch : 11'd512+{2'd0,bottom_bank,7'd0}+col_ch;
+  instruction[118]=output_mode;
  end
  // Input rows are interleaved by channel in a three-row ring. A reused row
  // is released at its last output, with no reader of the unused top halo.
- wire [12:0] input_index=layer==1 ? ({8'd0,load_ch}<<5)+({8'd0,load_ch}<<4)+{6'd0,load_y,3'd0}+load_x :
-                                    ({8'd0,load_ch}<<7)+({8'd0,load_ch}<<6)+{5'd0,load_y,4'd0}+load_x;
+ // The 7x7 output retains upper/current/lower rows and prefetches a fourth
+ // row in the existing cache. Replacing y-2 cannot destroy the upper halo.
+ wire [12:0] input_index=output_mode ? ({8'd0,load_ch}<<9)+({8'd0,load_ch}<<8)+{3'd0,load_y,5'd0}+load_x :
+                         layer==1 ? ({8'd0,load_ch}<<5)+({8'd0,load_ch}<<4)+{5'd0,load_y,3'd0}+load_x :
+                                    ({8'd0,load_ch}<<7)+({8'd0,load_ch}<<6)+{4'd0,load_y,4'd0}+load_x;
  assign req_valid=load_state==L_REQ;
- assign req_addr=(layer==1 ? 32'h00300000 : 32'h00400000)+{12'd0,input_index,7'd0}+(half ? 32'd64 : 0);
+ assign req_addr=(output_mode ? 32'h00500000 : layer==1 ? 32'h00300000 : 32'h00400000)+{12'd0,input_index,7'd0}+(half ? 32'd64 : 0);
  assign req_beats=4;
  assign rsp_ready=load_state==L_RSP && cache_ready;
  wire input_write=load_state==L_RSP && rsp_valid;
- wire [10:0] input_address=11'd512+((load_y%4'd3)<<7)+(layer==1 ? ({6'd0,load_x}<<4) : ({6'd0,load_x}<<3))+load_ch;
+ wire [10:0] input_address=output_mode ? {1'b0,load_y[1:0],load_x,3'b0}+load_ch :
+                             11'd512+((load_y%5'd3)<<7)+(layer==1 ? ({6'd0,load_x}<<4) : ({6'd0,load_x}<<3))+load_ch;
  // Packing uses only two five-pixel registers. The four source phases and
  // the complete destination tile live in the existing feature cache.
  localparam P_IDLE=0,P_EVEN=1,P_EWAIT=2,P_ODD=3,P_OWAIT=4,P_ROW=5,P_READ=6,P_SEND=7,P_ACK=8;
  reg [3:0] pack_state;reg pack_slot;reg [1:0] quad;reg [3:0] row;reg send_half;
  reg [39:0] even_pixels,odd_pixels;
- reg [4:0] slot_co[0:1],slot_x[0:1];reg [3:0] slot_y[0:1];
- reg [4:0] exec_co,exec_x;reg [3:0] exec_y;
+ reg [4:0] slot_co[0:1],slot_x[0:1],slot_y[0:1];
+ reg [4:0] exec_co,exec_x,exec_y;
  // Encoder pooled outputs also occupy 1424..1431. Shared-unit writeback
  // events belong to this scheduler only while its stage is active.
- wire phase_complete=(state==RUN || state==DRAIN) && writeback_valid && writeback_opcode==`MN_OP_NORM && writeback_addr>=1424 && writeback_addr<1432 && writeback_addr[1:0]==3;
+ wire phase_complete=(state==RUN || state==DRAIN) && writeback_valid && writeback_addr>=1424 && writeback_addr<1432 &&
+                       (output_mode ? writeback_opcode==`MN_OP_CONV && writeback_addr[1:0]==0 : writeback_opcode==`MN_OP_NORM && writeback_addr[1:0]==3);
  wire [3:0] source_row=(quad[1] ? 4'd5 : 4'd0)+(row>>1);
  wire [6:0] source_pixel=(source_row>=5 ? 7'd50 : 0)+(quad[0] ? 7'd25 : 0)+(source_row>=5 ? source_row-5 : source_row)*7'd5;
  wire [39:0] selected_pixels=cache_rdata[source_pixel*8+:40];
@@ -96,7 +108,7 @@ module cyclegan_decoder_scheduler(
   assign woven[g*16+:8]=even_pixels[g*8+:8];assign woven[g*16+8+:8]=odd_pixels[g*8+:8];
  end endgenerate
  wire pack_row_write=pack_state==P_ROW && !input_write;
- wire [10:0] output_address=11'd1432+{8'd0,pack_slot,quad};
+ wire [10:0] output_address=output_mode ? 11'd1424+{8'd0,pack_slot,2'b0} : 11'd1432+{8'd0,pack_slot,quad};
  assign cache_wr=(input_write || pack_row_write) && cache_ready;
  assign cache_waddr=input_write ? input_address : output_address;
  wire [799:0] row_data;wire [39:0] row_mask;
@@ -117,16 +129,18 @@ module cyclegan_decoder_scheduler(
  wire [12:0] out_channel_offset=layer==0 ? ({8'd0,slot_co[pack_slot]}<<5)+({8'd0,slot_co[pack_slot]}<<4) :
                                     layer==1 ? ({8'd0,slot_co[pack_slot]}<<7)+({8'd0,slot_co[pack_slot]}<<6) :
                                                ({8'd0,slot_co[pack_slot]}<<9)+({8'd0,slot_co[pack_slot]}<<8);
- wire [9:0] out_spatial=layer==0 ? ({6'd0,slot_y[pack_slot]}<<4)+({9'd0,quad[1]}<<3)+({5'd0,slot_x[pack_slot]}<<1)+quad[0] :
-                                 layer==1 ? ({5'd0,slot_y[pack_slot]}<<5)+({8'd0,quad[1]}<<4)+({4'd0,slot_x[pack_slot]}<<1)+quad[0] :
-                                            ({5'd0,slot_y[pack_slot]}<<6)+({8'd0,quad[1]}<<5)+({4'd0,slot_x[pack_slot]}<<1)+quad[0];
+ wire [9:0] out_spatial=output_mode ? {slot_y[pack_slot],slot_x[pack_slot]} :
+                       layer==0 ? ({5'd0,slot_y[pack_slot]}<<4)+({9'd0,quad[1]}<<3)+({5'd0,slot_x[pack_slot]}<<1)+quad[0] :
+                       layer==1 ? ({5'd0,slot_y[pack_slot]}<<5)+({8'd0,quad[1]}<<4)+({4'd0,slot_x[pack_slot]}<<1)+quad[0] :
+                                  ({5'd0,slot_y[pack_slot]}<<6)+({8'd0,quad[1]}<<5)+({4'd0,slot_x[pack_slot]}<<1)+quad[0];
  wire [12:0] out_index=out_channel_offset+out_spatial;
- assign write_addr=(layer==0 ? 32'h00300000 : layer==1 ? 32'h00400000 : 32'h00500000)+{12'd0,out_index,7'd0}+(send_half ? 32'd64 : 0);
+ assign write_addr=(output_mode ? 32'h00600000 : layer==0 ? 32'h00300000 : layer==1 ? 32'h00400000 : 32'h00500000)+{12'd0,out_index,7'd0}+(send_half ? 32'd64 : 0);
  assign write_data=send_half ? cache_rdata[799:400] : cache_rdata[399:0];
  assign write_valid=(state==RUN || state==DRAIN) && pack_state==P_SEND && cache_rvalid;
  reg [31:0] active_layer_cycles;
+ assign output_cycles=output_mode ? active_layer_cycles : 0;
  reg eligible_previous;
- wire eligible=state==RUN && rows_ready && (!starting_slot || !owned[co[0]]);
+ wire eligible=state==RUN && rows_ready && (!starting_slot || !owned[job_slot]);
  always @(posedge clk) begin
   done<=0;
   if(!rstn || frame_start) begin
@@ -134,9 +148,9 @@ module cyclegan_decoder_scheduler(
    owned<=0;ready_slots<=0;consumed_rows<=0;loaded_rows<=0;load_y<=0;load_x<=0;load_ch<=0;half<=0;load_state<=L_IDLE;
    pack_state<=P_IDLE;pack_slot<=0;quad<=0;row<=0;send_half<=0;even_pixels<=0;odd_pixels<=0;
    slot_co[0]<=0;slot_co[1]<=0;slot_x[0]<=0;slot_x[1]<=0;slot_y[0]<=0;slot_y[1]<=0;
-   exec_co<=0;exec_x<=0;exec_y<=0;layers_completed<=0;cycles<=0;layer_cycles<=0;active_layer_cycles<=0;command_wait_cycles<=0;data_wait_cycles<=0;eligible_previous<=0;
+   exec_co<=0;exec_x<=0;exec_y<=0;layers_completed<=0;output_completed<=0;cycles<=0;layer_cycles<=0;active_layer_cycles<=0;command_wait_cycles<=0;data_wait_cycles<=0;eligible_previous<=0;
   end else begin
-   if(state==RUN || state==DRAIN) begin cycles<=cycles+1;active_layer_cycles<=active_layer_cycles+1;end
+   if(state==RUN || state==DRAIN) begin if(!output_mode) cycles<=cycles+1;active_layer_cycles<=active_layer_cycles+1;end
    // Count empty instruction supply only while useful work is eligible.
    // The first FIFO refill after a data/ownership stall belongs to that
    // dependency. Count instruction starvation only after eligibility persists.
@@ -166,7 +180,7 @@ module cyclegan_decoder_scheduler(
     end else exec_co<=exec_co+1;
    end
    case(pack_state)
-    P_IDLE:if(ready_slots!=0) begin pack_slot<=ready_slots[0] ? 0 : 1;quad<=0;row<=0;send_half<=0;pack_state<=P_EVEN;end
+    P_IDLE:if(ready_slots!=0) begin pack_slot<=ready_slots[0] ? 0 : 1;quad<=0;row<=0;send_half<=0;pack_state<=output_mode ? P_READ : P_EVEN;end
     P_EVEN:if(cache_rd) pack_state<=P_EWAIT;
     P_EWAIT:if(cache_rvalid) begin even_pixels<=selected_pixels;pack_state<=P_ODD;end
     P_ODD:if(cache_rd) pack_state<=P_OWAIT;
@@ -178,18 +192,19 @@ module cyclegan_decoder_scheduler(
     P_SEND:if(write_valid && write_ready) pack_state<=P_ACK;
     P_ACK:if(write_ready) begin
      if(!send_half) begin send_half<=1;pack_state<=P_READ;end
-     else if(quad!=3) begin quad<=quad+1;row<=0;pack_state<=P_EVEN;end
+     else if(!output_mode && quad!=3) begin quad<=quad+1;row<=0;pack_state<=P_EVEN;end
      else begin owned[pack_slot]<=0;ready_slots[pack_slot]<=0;pack_state<=P_IDLE;end
     end
    endcase
    case(state)
     IDLE:if(start) state<=RUN;
     RUN:if(instruction_valid && instruction_ready) begin
-     if(starting_slot) owned[co[0]]<=1;
-     if(!norm) begin if(ch==cin-1) norm<=1;else ch<=ch+1;end
+     if(starting_slot) owned[job_slot]<=1;
+     if(!norm && ch!=cin-1) ch<=ch+1;
+     else if(!norm && !output_mode) norm<=1;
      else begin
       norm<=0;ch<=0;
-      if(phase!=3) phase<=phase+1;
+      if(!output_mode && phase!=3) phase<=phase+1;
       else begin
        phase<=0;
        if(co!=cout-1) co<=co+1;
@@ -198,10 +213,11 @@ module cyclegan_decoder_scheduler(
      end
     end
     DRAIN:if(!core_busy && queued==0 && owned==0 && pack_state==P_IDLE && write_ready) begin
-     layers_completed<=layers_completed+1;layer_cycles<=active_layer_cycles+1;state<=pause_each_layer ? PAUSE : NEXT;
+     if(output_mode) output_completed<=1;else layers_completed<=layers_completed+1;
+     layer_cycles<=active_layer_cycles+1;state<=pause_each_layer ? PAUSE : NEXT;
     end
     PAUSE:if(resume) state<=NEXT;
-    NEXT:if(layer==2) begin state<=IDLE;done<=1;end
+    NEXT:if(layer==(OUTPUT_ENABLE ? 3 : 2)) begin state<=IDLE;done<=1;end
      else begin
       layer<=layer+1;state<=RUN;phase<=0;co<=0;ch<=0;x<=0;y<=0;norm<=0;
       loaded_rows<=0;load_y<=0;load_x<=0;load_ch<=0;half<=0;load_state<=L_IDLE;

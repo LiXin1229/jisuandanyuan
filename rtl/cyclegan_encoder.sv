@@ -2,7 +2,7 @@
 // Stage 1: RGB DDR -> three encoders -> 32x30x40. One existing compute unit.
 // A row is published only after every queued instruction has completed.
 // Input DMA writes only raw slots older than the next row's upper halo.
-module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0, DECODER_ENABLE=0) (
+module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0, DECODER_ENABLE=0, OUTPUT_ENABLE=0) (
  input wire clk,rstn,start,input wire [31:0] frame_base,
  output wire busy,output reg done,fault,
  output reg [31:0] cycles,output reg [31:0] mac_cycles,first_output_cycle,
@@ -18,6 +18,7 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0, DECODE
  output reg [31:0] encoder_cycles,
  output wire [31:0] residual_cycles,block_cycles,
  output wire [1:0] layers_completed,output wire [31:0] decoder_cycles,layer_cycles,
+ output wire output_completed,output wire [31:0] output_cycles,
  output wire feature_write_valid,input wire feature_write_ready,output wire [31:0] feature_write_addr,output wire [399:0] feature_write_data
 );
  localparam IDLE=0,SELECT=1,RUN=2,FINISH=3,RESIDUAL=4,DECODER=5;
@@ -124,12 +125,13 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0, DECODE
  assign req_beats=state==DECODER ? decoder_req_beats : rgb_req_beats;
  assign rsp_ready=state==DECODER ? decoder_rsp_ready : rgb_rsp_ready;
  generate if(DECODER_ENABLE) begin:g_decoder
-  cyclegan_decoder_scheduler scheduler(.clk(clk),.rstn(rstn),.frame_start(start && state==IDLE),
+  cyclegan_decoder_scheduler #(.OUTPUT_ENABLE(OUTPUT_ENABLE)) scheduler(.clk(clk),.rstn(rstn),.frame_start(start && state==IDLE),
    .start(state==RESIDUAL && residual_done),.pause_each_layer(pause_each_block),.resume(resume),
    .instruction(decoder_instruction),.instruction_valid(decoder_valid),.instruction_ready(instruction_ready),
    .core_busy(core_busy),.memory_ready(memory_ready),.queued(queued),
    .writeback_valid(wb_valid),.writeback_addr(wb_addr),.writeback_opcode(wb_opcode),
    .done(decoder_done),.paused(decoder_paused),.layers_completed(layers_completed),
+   .output_completed(output_completed),.output_cycles(output_cycles),
    .cycles(decoder_cycles),.layer_cycles(layer_cycles),.command_wait_cycles(decoder_command_wait),.data_wait_cycles(decoder_data_wait),
    .req_valid(decoder_req_valid),.req_ready(req_ready && state==DECODER),.req_addr(decoder_req_addr),.req_beats(decoder_req_beats),
    .rsp_valid(rsp_valid && state==DECODER),.rsp_ready(decoder_rsp_ready),.rsp_data(rsp_data),
@@ -139,6 +141,7 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0, DECODE
  end else begin:g_no_decoder
   assign decoder_instruction=0;assign decoder_valid=0;assign decoder_done=0;assign decoder_paused=0;
   assign layers_completed=0;assign decoder_cycles=0;assign layer_cycles=0;assign decoder_command_wait=0;assign decoder_data_wait=0;
+  assign output_completed=0;assign output_cycles=0;
   assign decoder_req_valid=0;assign decoder_req_addr=0;assign decoder_req_beats=0;assign decoder_rsp_ready=0;
   assign decoder_wr=0;assign decoder_rd=0;assign decoder_waddr=0;assign decoder_raddr=0;assign decoder_wdata=0;assign decoder_we=0;
   assign feature_write_valid=0;assign feature_write_addr=0;assign feature_write_data=0;
@@ -160,7 +163,7 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0, DECODE
   .req_valid(rgb_req_valid),.req_ready(req_ready && state!=DECODER),.req_addr(rgb_req_addr),.req_beats(rgb_req_beats),
   .rsp_valid(rsp_valid && state!=DECODER),.rsp_ready(rgb_rsp_ready),.rsp_data(rsp_data),
   .cache_wr(load_wr),.cache_ready(load_ready),.cache_addr(load_addr),.cache_data(load_data),.cache_we(load_mask));
- mobilenet_unit #(.MODEL_PARAMS(1),.ENCODER_ONLY(!RESIDUAL_ENABLE),.RESIDUAL_PREFIX(RESIDUAL_ENABLE),.DECODER_PREFIX(DECODER_ENABLE),.STREAM_WRITES(1),.STREAM_READS(DECODER_ENABLE)) unit(
+ mobilenet_unit #(.MODEL_PARAMS(1),.ENCODER_ONLY(!RESIDUAL_ENABLE),.RESIDUAL_PREFIX(RESIDUAL_ENABLE && !OUTPUT_ENABLE),.DECODER_PREFIX(DECODER_ENABLE && !OUTPUT_ENABLE),.GENERATOR_ROM(OUTPUT_ENABLE),.STREAM_WRITES(1),.STREAM_READS(DECODER_ENABLE)) unit(
   .clk(clk),.reset(!rstn),.instruction(state==DECODER ? decoder_instruction : state==RESIDUAL ? residual_instruction : instruction),
   .instruction_valid(state==DECODER ? decoder_valid : state==RESIDUAL ? residual_valid : instruction_valid),
   .instruction_ready(instruction_ready),.instruction_count(queued),
