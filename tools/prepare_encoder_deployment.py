@@ -124,15 +124,54 @@ def board(dest,residual=False):
         for fragment in ('7:begin if(running && paused_s2)', '.resume(core_resume)',
                          'phase_change<=1;', '.RESIDUAL_ENABLE(1)', '.vio0_residual_status('):
             assert text.count(fragment)==1,('Board template expansion failed',fragment)
+        # Reuse the existing 800-bit acknowledged mailbox for diagnostics.
+        # Separate VIO statistics probes cost three synchronizer FFs and a
+        # scan register per bit. Snapshot only while idle or block-paused;
+        # all source counters and the held command bus are then stable.
+        text=text.replace("16'he312","16'he313")
+        text=text.replace("{21'd0,command[10:0]}","{command[27],20'd0,command[10:0]}")
+        text=text.replace('if(debug_ddr) debug_state<=3;else begin',
+            'if(debug_ddr) debug_state<=3;else if(debug_address[31]) debug_state<=5;else begin')
+        text=text.replace('    3:if(bridge_req_ready)',
+            # A statistics reply defines only its low 32 bits. Keeping the
+            # other 768 bits avoids a third input on the full data mux.
+            "    5:begin read_hold[31:0]<=statistic_word;debug_complete<=~debug_complete;debug_state<=0;end\n"
+            '    3:if(bridge_req_ready)')
+        # read_hold stays stable until the next acknowledged read. VIO already
+        # synchronizes every input bit in clk_sys; the completion toggle has
+        # also crossed two stages before ack. A second 800-bit data bank is
+        # therefore redundant. The host reads only after receiving that ack.
+        text=text.replace('reg [799:0] read_hold=0,read_data=0;',
+            'reg [799:0] read_hold=0;wire [799:0] read_data=read_hold;')
+        text=text.replace('read_data<=0;', '').replace('read_data<=read_hold;', '')
+        text=text.replace(' wire [31:0] status=',
+            " reg [31:0] statistic_word;\n always @* begin\n  case(debug_address[3:0])\n"
+            "   0:statistic_word=cycles;1:statistic_word=mac_cycles;2:statistic_word=first_cycle;\n"
+            "   3:statistic_word={frames,chunks};4:statistic_word=read_id;\n"
+            "   5:statistic_word={18'd0,phase_applied,phase_value,cal_shift,cal_log};\n"
+            "   6:statistic_word=command_wait_cycles;7:statistic_word=data_wait_cycles;8:statistic_word=input_checksum;\n"
+            "   9:statistic_word={16'd0,residual_output_base,blocks_completed,paused_s2};\n"
+            "   10:statistic_word=encoder_cycles;11:statistic_word=residual_cycles;12:statistic_word=block_cycles;\n"
+            "   default:statistic_word=0;\n  endcase\n end\n wire [31:0] status=")
+        text=text.replace("slots,push_ready,3'd0}","slots,push_ready,paused_s2,2'd0}")
+        # Preserve status and all 800 readback bits, plus the upload outputs.
+        import re
+        text=re.sub(r'\.vio0_(?:cycles|mac_cycles|first_cycle|counts|frame_id|calibration|command_wait_cycles|data_wait_cycles|input_checksum|residual_status|encoder_cycles|residual_cycles|block_cycles)\([^\n]*?\),(?=\.vio0_|\n|\s)', '',text)
+        # Concatenation arguments contain commas but no parentheses; the
+        # non-greedy match above stops at each complete port expression.
+        assert '.vio0_cycles(' not in text and '.vio0_block_cycles(' not in text
+        for fragment in ('read_hold[31:0]<=statistic_word;', 'debug_address[31]', 'paused_s2,2\'d0}', 'read_data=read_hold;'):
+            assert text.count(fragment)==1,('Compact mailbox expansion failed',fragment)
     (dest/'cyclegan_encoder_board.v').write_text('// Derived from pe10_10/encoder/rtl/encoder_board.v; current compute unit.\n'+text,encoding='utf8')
     profile=json.loads((REF/'project/encoder_board/debug_profile.json').read_text())
-    core=profile['debug_cores'][0];core['uuid']=('e312' if residual else 'e311')+'a571b2ce4108af3e1b2833228701'
+    core=profile['debug_cores'][0];core['uuid']=('e313' if residual else 'e311')+'a571b2ce4108af3e1b2833228701'
     # Inputs are listed first so host readback indices stay stable.
     probes=core['probes'];idx=next(i for i,p in enumerate(probes) if p['name']=='command')
     probes[idx:idx]=[dict(name='command_wait_cycles',width=32,init=None),dict(name='data_wait_cycles',width=32,init=None),dict(name='input_checksum',width=32,init=None)]
     if residual:
         idx=next(i for i,p in enumerate(probes) if p['name']=='command')
         probes[idx:idx]=[dict(name=name,width=32,init=None) for name in ('residual_status','encoder_cycles','residual_cycles','block_cycles')]
+        probes[:]=[p for p in probes if p['name'] in ('status','read_data0','read_data1','read_data2','read_data3','command','payload0','payload1')]
     (dest/'debug_profile.json').write_text(json.dumps(profile,indent=2))
     efx=Path(os.environ.get('EFINITY_HOME',r'D:\Efinity\2026.1'));sys.path.insert(0,str(efx/'debugger/bin'))
     from efx_dbg.define import DebugProfileBuilder

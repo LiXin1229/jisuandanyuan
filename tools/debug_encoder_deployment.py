@@ -26,7 +26,7 @@ class Board:
   s=self.read()
   if s['status']>>16!=signature:raise RuntimeError(f'Unexpected image: {s["status"]:08x}, expected {signature:04x}')
   self.toggle=(s['status']>>8)&1;self.payload=0
-  print(f'STAGE{2 if signature==0xe312 else 1}_JTAG_CONNECTED',hex(s['status']),flush=True)
+  print(f'STAGE{2 if signature in (0xe312,0xe313) else 1}_JTAG_CONNECTED',hex(s['status']),flush=True)
  def read(self):
   v=[int(x) for x in self.manager.read_vio(self.debug,'vio0')]
   return dict(status=v[0],cycles=v[1],busy_cycles=v[2],first_output=v[3],frames=v[4]>>16,

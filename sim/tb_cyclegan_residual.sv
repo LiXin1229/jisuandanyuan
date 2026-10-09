@@ -42,6 +42,16 @@ module tb_cyclegan_residual;
    if(dut.unit.result_write && dut.unit.dst_base==dut.load_addr) $fatal(1,"DMA/write ownership collision");
   end
   if(dut.unit.fifo_pop) commands=commands+1;
+  if(dut.g_residual.scheduler.outstanding>5) $fatal(1,"Residual outstanding overflow/underflow");
+  if(dut.state==dut.RUN && dut.outstanding>5) $fatal(1,"Encoder outstanding overflow/underflow");
+  if(dut.g_residual.scheduler.active_block_cycles==65535 || residual_cycles>442395)
+   $fatal(1,"Fixed residual counter bound exceeded");
+  if(dut.state==dut.RUN) begin
+   if(dut.center!==dut.input_base+(dut.y%3)*dut.row_size+dut.xc+dut.ch ||
+      dut.upper!==dut.input_base+((dut.y==0 ? 0 : dut.y-1)%3)*dut.row_size+dut.xc+dut.ch ||
+      dut.lower!==dut.input_base+((dut.y==dut.height-1 ? dut.y : dut.y+1)%3)*dut.row_size+dut.xc+dut.ch)
+    $fatal(1,"Ring address changed");
+  end
   if(dut.unit.result_write && dut.unit.opcode==5) begin
    index=dut.g_residual.scheduler.blocks_completed*384+dut.unit.dst_base-dut.g_residual.scheduler.dest_base;
    if(dut.unit.result_data!==gold_res[index]) $fatal(1,"Residual write mismatch block=%0d tile=%0d",dut.g_residual.scheduler.blocks_completed+1,index%384);

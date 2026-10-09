@@ -24,7 +24,11 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
  reg [4:0] loaded,r0,r1,r2,x,y,ch,load_x;
  reg [31:0] base;
  reg producer_done,row_started;
- reg [11:0] submitted,completed;
+ // Drain needs only FIFO + executor occupancy, bounded by five commands.
+ // The separate completion index is used only to timestamp command 34 of
+ // the first stage-3 row; its low six bits suffice before that timestamp.
+ reg [2:0] outstanding;
+ reg [5:0] completed;
  reg [4:0] executed_x,executed_step;
  reg [5:0] released_columns;
  wire [5:0] cin=stage==0 ? 3 : stage==1 ? 8 : 16;
@@ -36,11 +40,20 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
  // These are only factors 3/8/16: fixed wiring avoids address-only DSPs.
  wire [9:0] xc=stage==0 ? ({5'd0,x}<<1)+x : stage==1 ? {2'd0,x,3'd0} : {1'd0,x,4'd0};
  wire [9:0] cc=stage==0 ? ({5'd0,ch}<<1)+ch : stage==1 ? {2'd0,ch,3'd0} : {1'd0,ch,4'd0};
- wire [10:0] center=input_base+(y%3)*row_size+xc+ch;
- wire [10:0] upper=input_base+((y==0 ? 0 : y-1)%3)*row_size+xc+ch;
- wire [10:0] lower=input_base+((y==height-1 ? y : y+1)%3)*row_size+xc+ch;
- wire [10:0] pooled=stage==0 ? 288+((y>>1)%3)*128+(x>>1)*8+ch :
-                        stage==1 ? 672+((y>>1)%3)*128+(x>>1)*16+ch :
+ // Decode the three ring banks once. Explicit widths avoid 32-bit modulo
+ // and variable row-pitch multipliers for the neighboring halo addresses.
+ wire [1:0] row_bank=y%5'd3,pool_bank=(y>>1)%5'd3;
+ wire [1:0] upper_bank=y==0 ? row_bank : row_bank==0 ? 2 : row_bank-2'd1;
+ wire [1:0] lower_bank=y==height-1 ? row_bank : row_bank==2 ? 0 : row_bank+2'd1;
+ function automatic [8:0] ring_offset(input [1:0] bank,input raw);
+  begin ring_offset=raw ? ({7'd0,bank}<<6)+({7'd0,bank}<<5) : {bank,7'd0};end
+ endfunction
+ wire [10:0] column_address=input_base+xc+ch;
+ wire [10:0] center=column_address+ring_offset(row_bank,stage==0);
+ wire [10:0] upper=column_address+ring_offset(upper_bank,stage==0);
+ wire [10:0] lower=column_address+ring_offset(lower_bank,stage==0);
+ wire [10:0] pooled=stage==0 ? 288+{pool_bank,7'd0}+(x>>1)*8+ch :
+                        stage==1 ? 672+{pool_bank,7'd0}+(x>>1)*16+ch :
                         1056+ch*12+(y>>1)*4+(x>>1);
  wire [14:0] dw_base=stage==0 ? 0 : stage==1 ? 67 : 315;
  wire [14:0] db_base=stage==1 ? 139 : 459;
@@ -125,7 +138,7 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
   done<=0;
   if(!rstn) begin
    state<=IDLE;stage<=0;phase<=0;loaded<=0;r0<=0;r1<=0;r2<=0;x<=0;y<=0;ch<=0;load_x<=0;base<=0;
-   producer_done<=0;row_started<=0;submitted<=0;completed<=0;fault<=0;
+   producer_done<=0;row_started<=0;outstanding<=0;completed<=0;fault<=0;
    executed_x<=0;executed_step<=0;released_columns<=0;
    cycles<=0;mac_cycles<=0;first_output_cycle<=0;command_wait_cycles<=0;data_wait_cycles<=0;encoder_cycles<=0;
    input_crc<=32'hffffffff;
@@ -144,7 +157,7 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
      input_crc<=32'hffffffff;
     end
     SELECT:begin
-     x<=0;ch<=0;phase<=0;producer_done<=0;row_started<=0;submitted<=0;completed<=0;
+     x<=0;ch<=0;phase<=0;producer_done<=0;row_started<=0;outstanding<=0;completed<=0;
      executed_x<=0;executed_step<=0;
      released_columns<=r0==0 ? 32 : 0;
      if(r2==6) begin encoder_cycles<=cycles;state<=RESIDUAL_ENABLE ? RESIDUAL : FINISH;end
@@ -156,6 +169,11 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
      else data_wait_cycles<=data_wait_cycles+1;
     end
     RUN:begin
+     case ({instruction_valid && instruction_ready,core_done})
+      2'b10:outstanding<=outstanding+1'b1;
+      2'b01:outstanding<=outstanding-1'b1;
+      default:;
+     endcase
      if(memory_ready && queued!=0) row_started<=1;
      if(row_started && !producer_done && memory_ready && queued==0) command_wait_cycles<=command_wait_cycles+1;
      if(core_done) begin
@@ -168,7 +186,6 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
       if(stage==2 && first_output_cycle==0 && completed==33) first_output_cycle<=cycles;
      end
      if(instruction_valid && instruction_ready) begin
-      submitted<=submitted+1;
       case(phase)
        0:if(stage!=0) phase<=1;else if(ch==cin-1) begin ch<=0;phase<=2;end else ch<=ch+1;
        1:if(ch==cin-1) begin ch<=0;phase<=2;end else begin ch<=ch+1;phase<=0;end
@@ -182,7 +199,7 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
        end
       endcase
      end
-     if(producer_done && completed==submitted && !core_busy && queued==0) begin
+     if(producer_done && outstanding==0 && !core_busy && queued==0) begin
       if(stage==0) r0<=r0+1;else if(stage==1) r1<=r1+1;else r2<=r2+1;
       state<=SELECT;
      end

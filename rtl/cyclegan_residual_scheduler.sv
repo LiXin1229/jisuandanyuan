@@ -6,7 +6,7 @@ module cyclegan_residual_scheduler(
  output reg [127:0] instruction,output wire instruction_valid,input wire instruction_ready,
  input wire core_done,core_busy,memory_ready,input wire [2:0] queued,
  output reg done,output wire paused,output reg [3:0] blocks_completed,
- output reg [10:0] output_base,output reg [31:0] cycles,block_cycles,command_wait_cycles
+ output reg [10:0] output_base,output wire [31:0] cycles,block_cycles,command_wait_cycles
 );
  localparam IDLE=0,RUN=1,DRAIN=2,PAUSE=3,FINISH=4;
  reg [2:0] state,phase;
@@ -14,9 +14,19 @@ module cyclegan_residual_scheduler(
  reg [1:0] x,y;
  reg [10:0] input_base,dest_base;
  reg [14:0] parameter_base;
- reg [11:0] submitted,completed;
+ // At most four queued commands and one executing command. Keep their
+ // difference instead of two cumulative 12-bit counters; simultaneous
+ // acceptance/completion leaves the count unchanged.
+ reg [2:0] outstanding;
  reg started;
- reg [31:0] active_block_cycles;
+ // The fixed 1920-command block has no external stalls or DMA: 49155
+ // clocks/block, 442395 for nine blocks. Keep counters wide enough for
+ // these bounds; zero extension preserves the public 32-bit interface.
+ reg [18:0] cycle_count,wait_count;
+ reg [15:0] active_block_cycles,last_block_cycles;
+ assign cycles={13'd0,cycle_count};
+ assign command_wait_cycles={13'd0,wait_count};
+ assign block_cycles={16'd0,last_block_cycles};
  wire [10:0] channel_offset=({6'd0,ch}<<3)+({6'd0,ch}<<2);
  wire [10:0] spatial_offset={7'd0,y,x};
  wire [10:0] skip=input_base+channel_offset+spatial_offset;
@@ -60,20 +70,23 @@ module cyclegan_residual_scheduler(
   done<=0;
   if(!rstn || frame_start) begin
    state<=IDLE;phase<=0;ch<=0;x<=0;y<=0;input_base<=1056;dest_base<=0;parameter_base<=1067;
-   submitted<=0;completed<=0;started<=0;blocks_completed<=0;output_base<=1056;
-   cycles<=0;block_cycles<=0;active_block_cycles<=0;command_wait_cycles<=0;
+   outstanding<=0;started<=0;blocks_completed<=0;output_base<=1056;
+   cycle_count<=0;last_block_cycles<=0;active_block_cycles<=0;wait_count<=0;
   end else begin
    if(state==RUN || state==DRAIN) begin
-    cycles<=cycles+1;active_block_cycles<=active_block_cycles+1;
-    if(core_done) completed<=completed+1;
+    cycle_count<=cycle_count+1'b1;active_block_cycles<=active_block_cycles+1'b1;
+    case ({instruction_valid && instruction_ready,core_done})
+     2'b10:outstanding<=outstanding+1'b1;
+     2'b01:outstanding<=outstanding-1'b1;
+     default:;
+    endcase
    end
    case(state)
     IDLE:if(start) state<=RUN;
     RUN:begin
      if(memory_ready && queued!=0) started<=1;
-     if(started && memory_ready && queued==0) command_wait_cycles<=command_wait_cycles+1;
+     if(started && memory_ready && queued==0) wait_count<=wait_count+1'b1;
      if(instruction_ready) begin
-      submitted<=submitted+1;
       case(phase)
        0:phase<=1;
        1:if(ch==31) begin ch<=0;phase<=2;end else begin ch<=ch+1;phase<=0;end
@@ -88,16 +101,16 @@ module cyclegan_residual_scheduler(
       endcase
      end
     end
-    DRAIN:if(completed==submitted && !core_busy && queued==0) begin
+    DRAIN:if(outstanding==0 && !core_busy && queued==0) begin
      blocks_completed<=blocks_completed+1;output_base<=dest_base;
-     block_cycles<=active_block_cycles+1;
+     last_block_cycles<=active_block_cycles+1'b1;
      state<=pause_each_block ? PAUSE : FINISH;
     end
     PAUSE:if(resume) state<=FINISH;
     FINISH:if(blocks_completed==9) begin done<=1;state<=IDLE;end
      else begin
       input_base<=dest_base;dest_base<=dest_base==0 ? 384 : 0;parameter_base<=parameter_base+1440;
-      phase<=0;ch<=0;x<=0;y<=0;submitted<=0;completed<=0;started<=0;active_block_cycles<=0;state<=RUN;
+      phase<=0;ch<=0;x<=0;y<=0;outstanding<=0;started<=0;active_block_cycles<=0;state<=RUN;
      end
    endcase
   end

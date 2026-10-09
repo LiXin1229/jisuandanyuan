@@ -5,31 +5,55 @@ from datetime import datetime,timezone
 from debug_encoder_deployment import Board as EncoderBoard,ROOT
 
 class Board(EncoderBoard):
+ def __init__(self,project,url,freq):
+  profile=json.loads((project/'debug_profile.json').read_text())
+  self.compact=profile['debug_cores'][0]['uuid'].startswith('e313')
+  self.statistics_cache=dict.fromkeys(('cycles','busy_cycles','first_output','frames','chunks','frame_id','calibration',
+   'command_wait_cycles','data_wait_cycles','input_checksum','blocks_completed','output_base','encoder_cycles',
+   'residual_cycles','block_cycles','calibration_phase','phy_phase'),0)
+  super().__init__(project,url,freq,signature=0xe313 if self.compact else 0xe312)
  def read(self):
   v=[int(x) for x in self.manager.read_vio(self.debug,'vio0')]
+  if self.compact:
+   return dict(self.statistics_cache,status=v[0],paused=bool(v[0]&4),data=sum(x<<(200*i) for i,x in enumerate(v[1:5])))
   return dict(status=v[0],cycles=v[1],busy_cycles=v[2],first_output=v[3],frames=v[4]>>16,
    chunks=v[4]&65535,frame_id=v[5],calibration=v[6],data=sum(x<<(200*i) for i,x in enumerate(v[7:11])),
    command_wait_cycles=v[11],data_wait_cycles=v[12],input_checksum=v[13],paused=bool(v[14]&1),
    blocks_completed=(v[14]>>1)&15,output_base=(v[14]>>5)&2047,
    encoder_cycles=v[15],residual_cycles=v[16],block_cycles=v[17],calibration_phase=(v[6]>>7)&7,phy_phase=(v[6]>>10)&7)
+ def snapshot(self):
+  if not self.compact:return self.wait()
+  v=[]
+  # Counters are stable while idle/paused, so all words belong to one
+  # quiescent point without adding a wide snapshot register in the FPGA.
+  for index in range(13):
+   self.command(4,(1<<27)|index);s=self.wait();v.append(s['data']&0xffffffff)
+  self.statistics_cache=dict(cycles=v[0],busy_cycles=v[1],first_output=v[2],frames=v[3]>>16,chunks=v[3]&65535,
+   frame_id=v[4],calibration=v[5],command_wait_cycles=v[6],data_wait_cycles=v[7],input_checksum=v[8],
+   blocks_completed=(v[9]>>1)&15,output_base=(v[9]>>5)&2047,encoder_cycles=v[10],residual_cycles=v[11],block_cycles=v[12],
+   calibration_phase=(v[5]>>7)&7,phy_phase=(v[5]>>10)&7)
+  return dict(s,**self.statistics_cache)
  def wait_block(self,block,timeout=30):
   deadline=time.monotonic()+timeout
   while True:
    s=self.wait()
-   if s['paused'] and s['blocks_completed']==block:return s
+   if s['paused']:
+    s=self.snapshot()
+    if s['blocks_completed']==block:return s
    if time.monotonic()>deadline:raise TimeoutError(f'Block {block} timeout {s}')
 
 def main():
  ap=argparse.ArgumentParser();ap.add_argument('--project',type=Path);ap.add_argument('--url',required=True)
+ ap.add_argument('--out',type=Path,default=ROOT/'build/stage2')
  ap.add_argument('--frames',type=int,default=2,choices=[1,2,4]);ap.add_argument('--frequency',type=float,default=3e6)
  ap.add_argument('--verify-ddr',action='store_true');ap.add_argument('--mixed',action='store_true')
  ap.add_argument('--continuous',action='store_true');ap.add_argument('--phy-phase',type=int,choices=range(8));args=ap.parse_args()
  project=args.project or Path((ROOT/'build/stage2/staging_path.txt').read_text().strip())
  os.environ.setdefault('EFINITY_USER_DIR',str(project/'vendor_user'))
- out=ROOT/'build/stage2';out.mkdir(exist_ok=True)
- board=Board(project,args.url,args.frequency,signature=0xe312);reports=[];begin=time.monotonic();failure=None
+ out=args.out;out.mkdir(parents=True,exist_ok=True)
+ board=Board(project,args.url,args.frequency);reports=[];begin=time.monotonic();failure=None
  try:
-  board.command(5,0 if args.phy_phase is None else 8|args.phy_phase);state=board.wait()
+  board.command(5,0 if args.phy_phase is None else 8|args.phy_phase);board.wait();state=board.snapshot()
   if state['status']&0xc000!=0xc000:raise RuntimeError('DDR calibration did not pass')
   first_frame=state['frames']
   for frame in range(args.frames):
@@ -50,7 +74,8 @@ def main():
    board.command(3,int(pausing));time.sleep(.05)
    blocks=[]
    for block in (range(1,10) if pausing else [9]):
-    state=board.wait_block(block) if pausing else board.wait(complete=True)
+    if pausing:state=board.wait_block(block)
+    else:board.wait(complete=True);state=board.snapshot()
     if state['input_checksum']!=expected_crc:raise RuntimeError(f'Actual input CRC mismatch {state}')
     expected=(reference/f'block{block}_q44_tiles.bin').read_bytes();actual=bytearray()
     for tile in range(384):
@@ -63,7 +88,7 @@ def main():
     blocks.append(check);print('STAGE2_BLOCK',json.dumps(check),flush=True)
     if len(actual)!=len(expected) or mismatch:raise RuntimeError(f'Block {block} board mismatch {mismatch}')
     if pausing:board.command(7);board.wait()
-   state=board.wait(complete=True)
+   board.wait(complete=True);state=board.snapshot()
    stats={k:v for k,v in state.items() if k!='data'}
    stats.update(blocks=blocks,values=sum(b['values'] for b in blocks),mismatches=sum(b['mismatches'] for b in blocks),
     mode='block_readback' if pausing else 'continuous',input_variant=suffix or 'normal',expected_input_checksum=expected_crc,

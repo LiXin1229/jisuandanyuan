@@ -1,5 +1,7 @@
 # CycleGAN 四阶段迭代：第二阶段
 
+本文保留 `c31d0db` 的阶段二基线及历史位流证据。后续控制和调试寄存器优化见 [第二阶段资源优化](cyclegan_stage2_resource_optimization.md)，当前板级签名为 `0xe313`。
+
 接续第一阶段提交 `397a3cd`，实现 RGB 输入、三层编码与九个残差块的自主 FPGA 调度。使用相同 epoch11 权重和固定 BN，目标为 Ti60F225 C4，计算时钟 150 MHz、DDR 用户时钟 96 MHz。阶段三的转置卷积和阶段四的 7×7 输出尚未接入。
 
 本阶段已完成原生整帧仿真、两次下载后的六帧上板验收和资源/时序验证。最终机器证据见 [cyclegan_stage2_deployment.json](analysis/cyclegan_stage2_deployment.json)，记录源码、位流、实际编译副本、报告及回读结果的 SHA256。
