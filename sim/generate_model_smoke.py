@@ -29,6 +29,8 @@ commands=[
     Instruction(Operation.NORM,src=1350,dst=1351,parameter=51,activation=Activation.RELU,rounding=True),
     Instruction(Operation.CONV,src=100,dst=1352,parameter=20427,kernel=5,tanh=True),
     Instruction(Operation.ADD,src=1350,dst=1353,parameter=1351),
+    Instruction(Operation.CONV,src=100,dst=1354,parameter=20427,kernel=4,
+                padding=2,pad_width=3,edges=15,tanh=True),
 ]
 for case,cmd in enumerate(commands,1):
     emit(8,case);core.execute(cmd);emit(3,data=cmd.encode());emit(4)

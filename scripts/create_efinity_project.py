@@ -7,7 +7,7 @@ import shutil
 root=Path(__file__).resolve().parent.parent
 parser=argparse.ArgumentParser()
 parser.add_argument("--staging",type=Path)
-parser.add_argument("--top",choices=["mobilenet_bus_top","cyclegan_bus_top"],default="mobilenet_bus_top")
+parser.add_argument("--top",choices=["mobilenet_bus_top","cyclegan_bus_top","mn_instruction_fifo"],default="mobilenet_bus_top")
 args=parser.parse_args()
 destination=args.staging or root / "build" / "efinity"
 destination.mkdir(parents=True,exist_ok=True)
@@ -26,7 +26,7 @@ node(device,"device",name="Ti60F225")
 node(device,"timing_model",name="C4")
 design=node(project,"design_info",def_veri_version="sv_09",def_vhdl_version="vhdl_2008",unified_flow="false")
 node(design,"top_module",name=args.top)
-sources=["mn_cache.sv","mn_param_ram.sv","mn_instruction_fifo.sv","mn_dw_windows.sv","mn_dw_fast3.sv",
+sources=["mn_cache.sv","mn_param_ram.sv","mn_instruction_fifo.sv","mn_dw_buffer.sv",
          "mn_pe_array.sv","mn_postprocess.sv","mn_model_rom.sv","mn_tanh.sv",
          "mobilenet_unit.sv","mobilenet_bus_top.sv","cyclegan_bus_top.sv"]
 for source in sources:
@@ -48,7 +48,7 @@ for name,value,kind in [
     ("mode","area","e_option"),("dsp-input-regs-packing","1","e_option"),
     ("dsp-output-regs-packing","1","e_option"),("dsp-mac-packing","1","e_option"),
     ("bram_output_regs_packing","1","e_option"),("infer-clk-enable","3","e_option"),
-    ("infer-sync-set-reset","1","e_option"),("retiming","1","e_option"),
+    ("infer-sync-set-reset","1","e_option"),("retiming","0","e_option"),
     ("max_threads","4","e_integer")]:
     node(synthesis,"param",name=name,value=value,value_type=kind)
 pnr=node(project,"place_and_route",tool_name="efx_pnr")

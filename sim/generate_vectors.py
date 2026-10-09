@@ -370,6 +370,20 @@ for pad in (1,2):
                                rounding=1,pad=pad,width=1,edges=edge))
         emit(4);emit(5,1350,data=pack(result))
 
+# Shared radius-three buffer: every edge mask, tiny complete images and
+# partial bottom/right tiles whose reflection reaches neighboring tiles.
+for pad in (1,2):
+    for edge in range(16):
+        tx=0 if edge&1 else 1;ty=0 if edge&4 else 1
+        nx=tx+1 if edge&2 else tx+2;ny=ty+1 if edge&8 else ty+2
+        dw_case(4,tx,ty,nx*10,ny*10,pad,rounding=edge&1)
+for kernel in (3,4):
+    for pad in (1,2):
+        for width,height in ((1,1),(2,3),(3,2),(4,5),(7,9)):
+            dw_case(kernel,0,0,width,height,pad,rounding=1)
+        for width,height in ((11,12),(12,11)):
+            dw_case(kernel,1,1,width,height,pad,rounding=1)
+
 ROOT.joinpath("vectors.txt").write_text("\n".join(lines)+"\n",encoding="ascii")
 ROOT.joinpath("cases.json").write_text(json.dumps(cases,ensure_ascii=False,indent=2)+"\n",encoding="utf8")
 print(f"Generated {len(cases)} deterministic cases, {len(lines)} transactions")

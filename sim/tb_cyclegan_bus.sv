@@ -57,7 +57,7 @@ module tb_cyclegan_bus;
                 default:$fatal(1,"Unsupported model transaction");
             endcase
         end
-        $display("PASS epoch11 bus: fixed ROM DW/PW/BN/CONV-Tanh/ADD, third bank, extended parameters; %0d cycles",ticks);
+        $display("PASS epoch11 bus: fixed ROM DW/PW/BN/CONV-Tanh/ADD, 7x7 CONV-Tanh, third bank, extended parameters; %0d commands, %0d cycles",case_id,ticks);
         $finish;
     end
 endmodule

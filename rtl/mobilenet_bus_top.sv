@@ -26,6 +26,14 @@ module mobilenet_bus_top #(parameter MODEL_PARAMS=0) (
     assign bus_ready=!reset && (commit_memory ? memory_ready :
         bus_wr && bus_addr==7 ? command_ready : 1'b1);
     wire accept_write=bus_wr && bus_ready;
+    (* syn_keep=1 *) wire [24:0] select_tile_word;
+    reg [31:0] tile_read_word;
+    integer read_word;
+    always @* begin
+        tile_read_word=0;
+        for(read_word=0;read_word<25;read_word=read_word+1)
+            tile_read_word=tile_read_word|(tile_staging[read_word*32+:32]&{32{select_tile_word[read_word]}});
+    end
     mobilenet_unit #(.MODEL_PARAMS(MODEL_PARAMS)) unit(.clk(clk),.reset(reset),
         .instruction(command_staging),.instruction_valid(accept_write && bus_addr==7),
         .instruction_ready(command_ready),.instruction_count(queued),
@@ -74,14 +82,14 @@ module mobilenet_bus_top #(parameter MODEL_PARAMS=0) (
                     11:bus_rdata<=command_staging[127:96];
                     12:bus_rdata<=cache_slices[31:0];
                     13:bus_rdata<={24'd0,cache_slices[39:32]};
-                    default:bus_rdata<=bus_addr>=32 && bus_addr<=56 ?
-                        tile_staging[(bus_addr-6'd32)*32+:32] : 32'd0;
+                    default:bus_rdata<=tile_read_word;
                 endcase
             end
         end
     end
     genvar w;
     generate for(w=0;w<25;w=w+1) begin: staging_words
+        assign select_tile_word[w]=bus_addr==32+w;
         always @(posedge clk) begin
             if(cache_read_valid) tile_staging[w*32+:32]<=cache_read_data[w*32+:32];
             else if(accept_write && bus_addr==32+w) tile_staging[w*32+:32]<=bus_wdata;

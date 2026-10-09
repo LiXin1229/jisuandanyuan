@@ -57,7 +57,7 @@ module mn_tanh_tile(input wire clk,rstn,start,input wire [3199:0] in_data,
  mn_tanh_bram_dual u_lut(.clk(clk),.rd_en(v[2]),.addr0(addr_q[0]),.addr1(addr_q[1]),.data0(rom_q[0]),.data1(rom_q[1]));
  genvar g;
  generate for(g=0;g<100;g=g+1) begin:g_compact
-  assign compact[g]={|(sum[g][35:16]^{20{sum[g][15]}}),sum[g][35],sum[g][15:0]};
+  assign compact[g]={sum[g][31] ? !(&sum[g][30:15]) : |sum[g][30:15],sum[g][31],sum[g][15:0]};
  end
  for(g=0;g<4;g=g+1) begin:g_select
   reg [17:0] selected;integer k;
