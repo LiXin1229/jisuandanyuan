@@ -2,7 +2,7 @@
 
 目标器件 Ti60 F225，Efinity 2026.1；100 路 DSP、10×10 tile、signed8 Q4.4 数据和 signed16 Q8.8 参数。
 
-本次四阶段板级迭代已完成编码和九个残差块：FPGA 自主执行 RGB 输入至残差末尾，输出 32×30×40，复用同一计算单元和片上缓存。本轮精简调试回读和调度控制，完整 DDR/JTAG 网表为 **211 BRAM、18057 LUT4、10581 FF、100 DSP**；相比阶段二基线减少 **2011 FF（15.97%）和 21 LUT**。优化后两次下载的六帧验收通过：四帧逐块回读、两帧无暂停连续运行，共 **1459200 个值零差异**，各块哈希与优化前一致，输入 CRC32 全部匹配，指令供应等待为零。九块残差仍为 **2.9493 ms**，含编码前缀约 **8.66 ms**；150 MHz setup/hold 余量 **1.115/0.029 ns**。默认 DDR 相位为 6，板级签名 `0xe313`。转置卷积和 7×7 输出尚未完成板级部署。详见 [本轮资源优化](docs/cyclegan_stage2_resource_optimization.md)、[优化验证证据](docs/analysis/cyclegan_stage2_resource_optimization.json)、[第二阶段基线](docs/cyclegan_stage2_deployment.md) 和 [第一阶段记录](docs/cyclegan_stage1_deployment.md)。
+本次四阶段板级迭代已完成前三阶段：FPGA 自主执行 RGB 输入、三层编码、九个残差块和三层转置卷积，输出 **8×240×320 Q4.4 特征**。转置卷积复用同一计算单元，采用固定归一化、四相 CONV、双输出槽、行预取及 DDR 写回。完整 DDR/JTAG 网表为 **218 BRAM、20636 LUT4、11384 FF、100 DSP**；新增 7 BRAM 全部用于参数，feature cache 和 DSP 没有增加。两次下载的四帧验收通过：两帧逐块/逐层回读、两帧不暂停连续运行，共 **3609600 个值零差异**，输入 CRC 全部匹配，指令供应等待为零。转置阶段约 **25.24 ms**，完整前缀约 **33.90 ms**；150 MHz setup/hold 余量 **0.869/0.035 ns**。默认 DDR 相位为 6，板级签名 `0xe314`。第四阶段的 7×7 输出及 Tanh 尚未接入自主板级前缀。详见 [第三阶段部署记录](docs/cyclegan_stage3_deployment.md)、[第三阶段验证证据](docs/analysis/cyclegan_stage3_deployment.json)、[第二阶段资源优化](docs/cyclegan_stage2_resource_optimization.md)、[第二阶段基线](docs/cyclegan_stage2_deployment.md) 和 [第一阶段记录](docs/cyclegan_stage1_deployment.md)。
 
 完整模型总线版（此前实现）支持 `netG_B_epoch11.pth` 的 7×7 输出生成器，采用 checkpoint 的固定 BN 统计生成 affine 参数。整网调度在主机端运行，编码、残差、四相转置卷积和 Tanh 复用同一计算单元。核心及全部缓存/模型参数/Tanh 综合为 **195 BRAM、15807 LUT4、4026 FF、100 DSP**（核心历史预算约 200，不包含 DDR/JTAG 板级壳）；**150 MHz** 内部时序通过布局布线检查，setup / hold 余量 **0.725 / 0.026 ns**。本轮采用 BRAM 与工作窗口同步初始化的折中方案，仅增加 **1124 LUT**：3×3 / 7×7 DW 仍连续发射 9 / 49 次 MAC，无填充执行时间从 77 / 117 降到 **52 / 92 拍**，150 MHz 下约 **347 / 613 ns**。PW 无舍入仍为 `Cin+8` 拍；需要修补的边每个增加 9 拍，排队弹出间隔在执行时间基础上加 1 拍。
 
@@ -46,4 +46,4 @@ $modelPython='C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime
 
 RTL 仿真使用 Icarus Verilog。综合脚本为 Efinity 建立 ASCII 路径副本，报告复制到 `build/efinity/outflow`；默认时钟为 150 MHz。`run_pnr.ps1` 会检查 setup 和 hold，任一负余量都报错。独立时序对照可用 `run_timing_sweep.ps1 -Frequencies 150,200`，结果保存在 `build/timing`，不覆盖生产报告。默认 `run_synthesis.ps1` 仍综合可写参数顶层；其综合网表测试用 `run_postmap_sim.ps1`。固定模型综合网表测试用 `run_cyclegan_checks.ps1`。
 
-板上使用时，实现遵守 ready/rvalid 的 `write_word/read_word` 传输适配器，再将 `BusCore` 交给 `GeneratorScheduler`。当前已有官方 JTAG 上传/回读、DDR 输入帧缓冲和自主 FPGA 编码/残差调度器，可通过 `scripts/run_residual_board.ps1 -Program -RepeatBoot -PhaseControl` 构建、烧录并验证。完整生成器的转置卷积及 7×7 输出仍使用整数指令模型验证，尚未接入自主板级前缀。
+板上使用时，实现遵守 ready/rvalid 的 `write_word/read_word` 传输适配器，再将 `BusCore` 交给 `GeneratorScheduler`。当前已有官方 JTAG 上传/回读、DDR 输入帧缓冲和自主 FPGA 编码、残差、转置卷积调度器，可通过 `scripts/run_decoder_board.ps1 -Program -RepeatBoot` 构建、烧录并验证第三阶段；原来的 `scripts/run_residual_board.ps1` 保留第二阶段构建。第三阶段复现及 DDR 特征布局见部署记录。7×7 输出及 Tanh 已有整数指令模型验证，尚未接入自主板级前缀。

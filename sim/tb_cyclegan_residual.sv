@@ -16,7 +16,8 @@ module tb_cyclegan_residual;
  wire [31:0] encoder_cycles,residual_cycles,block_cycles;
  integer block,rr,res_checks=0,paused_checks=0,res_ddr=0,baseline_commands;
  reg [799:0] gold_res[0:3455];string block_file;reg [31:0] paused_cycles;
- cyclegan_encoder #(.RESIDUAL_ENABLE(1)) dut(.*,.frame_base(32'd0));
+ cyclegan_encoder #(.RESIDUAL_ENABLE(1)) dut(.*,.frame_base(32'd0),.layers_completed(),.decoder_cycles(),.layer_cycles(),
+  .feature_write_valid(),.feature_write_ready(1'b1),.feature_write_addr(),.feature_write_data());
  always @(posedge clk) if(rstn) begin
   ticks<=ticks+1;
   if($test$plusargs("debug") && (ticks<40 || ticks%1000==0))

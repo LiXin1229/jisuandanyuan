@@ -55,9 +55,10 @@ def assets():
             (dest/f'stage{i}_tiles.mem').write_text(''.join(f'{int.from_bytes(t,"little"):0200x}\n' for t in tiles))
     print('STAGE1_ASSETS_PASS 1067 exact parameters, 3 ROM BRAM, two reference frames')
 
-def board(dest,residual=False):
+def board(dest,residual=False,decoder=False):
     dest=dest.resolve();dest.mkdir(parents=True,exist_ok=True)
     sources=SOURCES+(['mn_residual_rom.sv','cyclegan_residual_scheduler.sv'] if residual else [])
+    if decoder:sources+=['mn_decoder_rom.sv','cyclegan_decoder_scheduler.sv','cyclegan_feature_writer.sv','cyclegan_write_arbiter.sv']
     for name in sources+['mn_isa.vh','mn_model_params_init.vh','mn_tanh_u8.mem']:
         shutil.copy2(ROOT/'rtl'/name,dest/name)
     (dest/'rtl').mkdir(exist_ok=True)
@@ -162,9 +163,39 @@ def board(dest,residual=False):
         assert '.vio0_cycles(' not in text and '.vio0_block_cycles(' not in text
         for fragment in ('read_hold[31:0]<=statistic_word;', 'debug_address[31]', 'paused_s2,2\'d0}', 'read_data=read_hold;'):
             assert text.count(fragment)==1,('Compact mailbox expansion failed',fragment)
+    if decoder:
+        assert residual
+        text=text.replace("16'he313","16'he314").replace('.RESIDUAL_ENABLE(1)', '.RESIDUAL_ENABLE(1),.DECODER_ENABLE(1)')
+        text=text.replace("(command[30:28]==4 && paused_s2)","paused_s2")
+        text=text.replace(' wire [31:0] encoder_cycles,residual_cycles,block_cycles;',
+            ' wire [31:0] encoder_cycles,residual_cycles,block_cycles,decoder_cycles,layer_cycles;wire [1:0] layers_completed;\n'
+            ' wire feature_write_valid,feature_write_ready,writer_fault;wire [31:0] feature_write_addr;wire [399:0] feature_write_data;')
+        text=text.replace('  .residual_cycles(residual_cycles),.block_cycles(block_cycles),',
+            '  .residual_cycles(residual_cycles),.block_cycles(block_cycles),\n'
+            '  .decoder_cycles(decoder_cycles),.layer_cycles(layer_cycles),.layers_completed(layers_completed),\n'
+            '  .feature_write_valid(feature_write_valid),.feature_write_ready(feature_write_ready),.feature_write_addr(feature_write_addr),.feature_write_data(feature_write_data),')
+        text=text.replace('   default:statistic_word=0;',
+            "   13:statistic_word={30'd0,layers_completed};14:statistic_word=decoder_cycles;15:statistic_word=layer_cycles;\n   default:statistic_word=0;")
+        # Frame upload and feature writer share a transaction-owned AXI port.
+        start=text.index(' frame_pingpong u_pp(');end=text.index(' reg run_toggle=',start)
+        pp=text[start:end]
+        for name in ('awvalid','awready','awaddr','awlen','wvalid','wready','wdata','wlast','bvalid','bready'):
+            pp=pp.replace(f'.{name}({name})',f'.{name}(pp_{name})')
+        wires=' wire pp_awvalid,pp_awready,pp_wvalid,pp_wready,pp_wlast,pp_bvalid,pp_bready;wire [31:0] pp_awaddr;wire [7:0] pp_awlen;wire [127:0] pp_wdata;\n'
+        wires+=' wire fw_awvalid,fw_awready,fw_wvalid,fw_wready,fw_wlast,fw_bvalid,fw_bready;wire [31:0] fw_awaddr;wire [7:0] fw_awlen;wire [127:0] fw_wdata;\n'
+        writer=' cyclegan_feature_writer u_writer(.cclk(clk_compute),.crstn(crstn),.s_valid(feature_write_valid),.s_ready(feature_write_ready),.s_addr(feature_write_addr),.s_data(feature_write_data),.fault(writer_fault),\n'
+        writer+='  .dclk(clk_sys),.drstn(drstn),.enable(enable),'+','.join(f'.{n}(fw_{n})' for n in ('awvalid','awready','awaddr','awlen','wvalid','wready','wdata','wlast','bvalid','bready'))+',.bresp(bresp));\n'
+        arb=' cyclegan_write_arbiter u_write_arbiter(.clk(clk_sys),.rstn(drstn),\n'
+        arb+='  '+','.join(f'.a_{n}(pp_{n})' for n in ('awvalid','awready','awaddr','awlen','wvalid','wready','wdata','wlast','bvalid','bready'))+',\n'
+        arb+='  '+','.join(f'.b_{n}(fw_{n})' for n in ('awvalid','awready','awaddr','awlen','wvalid','wready','wdata','wlast','bvalid','bready'))+',\n'
+        arb+='  '+','.join(f'.{n}({n})' for n in ('awvalid','awready','awaddr','awlen','wvalid','wready','wdata','wlast','bvalid','bready'))+');\n'
+        text=text[:start]+wires+pp+writer+arb+text[end:]
+        text=text.replace('bridge_fault,core_fault,running,ack','bridge_fault,(core_fault|writer_fault),running,ack')
+        for fragment in ('u_writer(', 'u_write_arbiter(', '.feature_write_data(feature_write_data)', '13:statistic_word='):
+            assert text.count(fragment)==1,fragment
     (dest/'cyclegan_encoder_board.v').write_text('// Derived from pe10_10/encoder/rtl/encoder_board.v; current compute unit.\n'+text,encoding='utf8')
     profile=json.loads((REF/'project/encoder_board/debug_profile.json').read_text())
-    core=profile['debug_cores'][0];core['uuid']=('e313' if residual else 'e311')+'a571b2ce4108af3e1b2833228701'
+    core=profile['debug_cores'][0];core['uuid']=('e314' if decoder else 'e313' if residual else 'e311')+'a571b2ce4108af3e1b2833228701'
     # Inputs are listed first so host readback indices stay stable.
     probes=core['probes'];idx=next(i for i,p in enumerate(probes) if p['name']=='command')
     probes[idx:idx]=[dict(name='command_wait_cycles',width=32,init=None),dict(name='data_wait_cycles',width=32,init=None),dict(name='input_checksum',width=32,init=None)]

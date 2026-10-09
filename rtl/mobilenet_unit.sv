@@ -1,5 +1,5 @@
 `include "mn_isa.vh"
-module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=0, RESIDUAL_PREFIX=0) (
+module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=0, RESIDUAL_PREFIX=0, DECODER_PREFIX=0, STREAM_READS=0) (
     input wire clk,reset,
     input wire [127:0] instruction,
     input wire instruction_valid,
@@ -13,6 +13,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     input wire [10:0] host_cache_raddr,
     output wire host_memory_ready,
     output wire host_stream_ready,
+    output wire host_read_ready,
     output wire [799:0] host_cache_rdata,
     output wire host_cache_rvalid,
     input wire host_param_wr,
@@ -21,6 +22,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     output wire busy,
     output reg done,
     output reg [3:0] error_code
+    ,output wire writeback_valid,output wire [10:0] writeback_addr,output wire [3:0] writeback_opcode
 );
     localparam IDLE=0,CHECK=1,CLEAR=2,LOAD=3,LOAD_DRAIN=4,PAD_X=5,PAD_Y=6,
         DW_RUN=7,PW_RUN=8,N_X=9,ADD_FIRST=10,ADD_SECOND=11,
@@ -34,7 +36,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     wire [14:0] param_base={cmd[94:92],cmd[35:24]};
     wire ring_enable=cmd[95];
     wire [10:0] top_src=cmd[106:96],bottom_src=cmd[117:107];
-    wire tanh_enable=!(ENCODER_ONLY || RESIDUAL_PREFIX) && cmd[118];
+    wire tanh_enable=!(ENCODER_ONLY || RESIDUAL_PREFIX || DECODER_PREFIX) && cmd[118];
     wire spatial=opcode==`MN_OP_DW || opcode==`MN_OP_CONV;
     wire continuation=opcode==`MN_OP_PW || opcode==`MN_OP_CONV;
     wire [5:0] channels={1'b0,cmd[40:36]}+6'd1;
@@ -197,7 +199,9 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     wire [15:0] param_data;
     wire param_valid;
     generate if(MODEL_PARAMS) begin: model_parameters
-        if(RESIDUAL_PREFIX) begin: residual_rom
+        if(DECODER_PREFIX) begin: decoder_rom
+            mn_decoder_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
+        end else if(RESIDUAL_PREFIX) begin: residual_rom
             mn_residual_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
         end else if(ENCODER_ONLY) begin: encoder_rom
             mn_encoder_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
@@ -269,9 +273,14 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     // Keep streaming writes in cycles where the core RAM port is inactive.
     // Arithmetic continues; the loader holds its row until this grant arrives.
     assign host_stream_ready=!reset && !cache_rd_en && !result_write;
+    // Window loading consumes several rows from the held cache output.
+    // Port B is reserved until that serial load completes, even on cycles
+    // without a new RAM read. Port A writes can still proceed independently.
+    assign host_read_ready=host_stream_ready && !d1_load && state!=LOAD && state!=LOAD_DRAIN;
+    assign writeback_valid=result_write;assign writeback_addr=dst_base;assign writeback_opcode=opcode;
     mn_cache cache(.clk(clk),.reset(reset),.wr_en(result_write),.wr_addr(dst_base),.wr_data(result_data),.wr_quadrants(result_mask),
         .rd_en(cache_rd_en),.rd_addr(cache_rd_addr),.rd_data(cache_data),.rd_valid(cache_valid),
-        .host_wr(host_cache_wr && (STREAM_WRITES ? host_stream_ready : host_memory_ready)),.host_rd(host_cache_rd && host_memory_ready),
+        .host_wr(host_cache_wr && (STREAM_WRITES ? host_stream_ready : host_memory_ready)),.host_rd(host_cache_rd && (STREAM_READS ? host_read_ready : host_memory_ready)),
         .host_waddr(host_cache_waddr),.host_raddr(host_cache_raddr),.host_wdata(host_cache_wdata),.host_mask(host_cache_wmask),
         .host_rdata(host_cache_rdata),.host_rvalid(host_cache_rvalid));
     wire [11:0] pw_end={1'b0,src_base}+channels;
@@ -279,9 +288,9 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     wire bad_padding=spatial && edges!=0 && (pad_kind==`MN_PAD_NONE || pad_width==0 || pad_width==2 || (kernel==4 && pad_width<3));
     wire bad_command=opcode>`MN_OP_ADD || activation==3 || write_mode>4 || cmd[61:58]>9 || cmd[65:62]>9 || cmd[127:119]!=0 ||
         (opcode!=`MN_OP_NOP && (src_base>=WINDOW_BASE || dst_base>=WINDOW_BASE)) || (opcode==`MN_OP_PW && pw_end>WINDOW_BASE) ||
-        (opcode==`MN_OP_ADD ? param_base>=WINDOW_BASE : opcode!=`MN_OP_NOP && param_end>(MODEL_PARAMS ? (RESIDUAL_PREFIX ? 14027 : ENCODER_ONLY ? 1067 : 21603) : 4096)) ||
+        (opcode==`MN_OP_ADD ? param_base>=WINDOW_BASE : opcode!=`MN_OP_NOP && param_end>(MODEL_PARAMS ? (DECODER_PREFIX ? 20427 : RESIDUAL_PREFIX ? 14027 : ENCODER_ONLY ? 1067 : 21603) : 4096)) ||
         (ENCODER_ONLY && (opcode>`MN_OP_NOP || cmd[118])) ||
-        (RESIDUAL_PREFIX && cmd[118]) ||
+        ((RESIDUAL_PREFIX || DECODER_PREFIX) && cmd[118]) ||
         (spatial && (kernel>5 || channels!=1 || tile_pitch==0 || row_pitch==0 || pad_kind==3)) ||
         ((pool_enable || stride2) && write_mode==0) || (pool_enable && stride2) || (opcode==`MN_OP_NORM && channels!=1) || bad_padding ||
         (keep_acc && (!continuation || !acc_live || acc_dst!=dst_base || acc_round!=rounding)) ||

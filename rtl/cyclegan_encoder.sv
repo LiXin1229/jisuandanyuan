@@ -2,7 +2,7 @@
 // Stage 1: RGB DDR -> three encoders -> 32x30x40. One existing compute unit.
 // A row is published only after every queued instruction has completed.
 // Input DMA writes only raw slots older than the next row's upper halo.
-module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
+module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0, DECODER_ENABLE=0) (
  input wire clk,rstn,start,input wire [31:0] frame_base,
  output wire busy,output reg done,fault,
  output reg [31:0] cycles,output reg [31:0] mac_cycles,first_output_cycle,
@@ -16,9 +16,11 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
  input wire pause_each_block,resume,
  output wire paused,output wire [3:0] blocks_completed,output wire [10:0] residual_output_base,
  output reg [31:0] encoder_cycles,
- output wire [31:0] residual_cycles,block_cycles
+ output wire [31:0] residual_cycles,block_cycles,
+ output wire [1:0] layers_completed,output wire [31:0] decoder_cycles,layer_cycles,
+ output wire feature_write_valid,input wire feature_write_ready,output wire [31:0] feature_write_addr,output wire [399:0] feature_write_data
 );
- localparam IDLE=0,SELECT=1,RUN=2,FINISH=3,RESIDUAL=4;
+ localparam IDLE=0,SELECT=1,RUN=2,FINISH=3,RESIDUAL=4,DECODER=5;
  reg [2:0] state;
  reg [1:0] stage,phase;
  reg [4:0] loaded,r0,r1,r2,x,y,ch,load_x;
@@ -90,6 +92,8 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
  wire instruction_valid=state==RUN && !producer_done;
  wire [127:0] residual_instruction;
  wire residual_valid,residual_done;
+ wire residual_paused,decoder_paused;
+ assign paused=residual_paused || decoder_paused;
  wire [31:0] residual_command_wait;
  wire encoder_to_residual=RESIDUAL_ENABLE && state==SELECT && r2==6;
  generate if(RESIDUAL_ENABLE) begin:g_residual
@@ -97,15 +101,48 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
    .start(encoder_to_residual),.pause_each_block(pause_each_block),.resume(resume),
    .instruction(residual_instruction),.instruction_valid(residual_valid),.instruction_ready(instruction_ready),
    .core_done(core_done),.core_busy(core_busy),.memory_ready(memory_ready),.queued(queued),
-   .done(residual_done),.paused(paused),.blocks_completed(blocks_completed),.output_base(residual_output_base),
+   .done(residual_done),.paused(residual_paused),.blocks_completed(blocks_completed),.output_base(residual_output_base),
    .cycles(residual_cycles),.block_cycles(block_cycles),.command_wait_cycles(residual_command_wait));
  end else begin:g_no_residual
   assign residual_instruction=0;assign residual_valid=0;assign residual_done=0;
-  assign paused=0;assign blocks_completed=0;assign residual_output_base=1056;
+  assign residual_paused=0;assign blocks_completed=0;assign residual_output_base=1056;
   assign residual_cycles=0;assign block_cycles=0;assign residual_command_wait=0;
  end endgenerate
  wire load_busy,load_done,load_wr,load_ready;
  wire [10:0] load_addr;wire [799:0] load_data;wire [39:0] load_mask;
+ wire rgb_req_valid,rgb_rsp_ready;wire [31:0] rgb_req_addr;wire [2:0] rgb_req_beats;
+ wire [127:0] decoder_instruction;wire decoder_valid,decoder_done;
+ wire [31:0] decoder_command_wait,decoder_data_wait;
+ wire decoder_req_valid,decoder_rsp_ready;wire [31:0] decoder_req_addr;wire [2:0] decoder_req_beats;
+ wire decoder_wr,decoder_rd;wire [10:0] decoder_waddr,decoder_raddr;wire [799:0] decoder_wdata;wire [39:0] decoder_we;
+ wire wb_valid;wire [10:0] wb_addr;wire [3:0] wb_opcode;
+ wire stream_ready,cache_read_ready,cache_rvalid;wire [799:0] cache_rdata;
+ assign dbg_data=cache_rdata;assign dbg_valid=cache_rvalid;
+ assign load_ready=stream_ready;
+ assign req_valid=state==DECODER ? decoder_req_valid : rgb_req_valid;
+ assign req_addr=state==DECODER ? decoder_req_addr : rgb_req_addr;
+ assign req_beats=state==DECODER ? decoder_req_beats : rgb_req_beats;
+ assign rsp_ready=state==DECODER ? decoder_rsp_ready : rgb_rsp_ready;
+ generate if(DECODER_ENABLE) begin:g_decoder
+  cyclegan_decoder_scheduler scheduler(.clk(clk),.rstn(rstn),.frame_start(start && state==IDLE),
+   .start(state==RESIDUAL && residual_done),.pause_each_layer(pause_each_block),.resume(resume),
+   .instruction(decoder_instruction),.instruction_valid(decoder_valid),.instruction_ready(instruction_ready),
+   .core_busy(core_busy),.memory_ready(memory_ready),.queued(queued),
+   .writeback_valid(wb_valid),.writeback_addr(wb_addr),.writeback_opcode(wb_opcode),
+   .done(decoder_done),.paused(decoder_paused),.layers_completed(layers_completed),
+   .cycles(decoder_cycles),.layer_cycles(layer_cycles),.command_wait_cycles(decoder_command_wait),.data_wait_cycles(decoder_data_wait),
+   .req_valid(decoder_req_valid),.req_ready(req_ready && state==DECODER),.req_addr(decoder_req_addr),.req_beats(decoder_req_beats),
+   .rsp_valid(rsp_valid && state==DECODER),.rsp_ready(decoder_rsp_ready),.rsp_data(rsp_data),
+   .cache_wr(decoder_wr),.cache_ready(stream_ready),.cache_waddr(decoder_waddr),.cache_wdata(decoder_wdata),.cache_we(decoder_we),
+   .cache_rd(decoder_rd),.cache_read_ready(cache_read_ready),.cache_raddr(decoder_raddr),.cache_rvalid(cache_rvalid),.cache_rdata(cache_rdata),
+   .write_valid(feature_write_valid),.write_ready(feature_write_ready),.write_addr(feature_write_addr),.write_data(feature_write_data));
+ end else begin:g_no_decoder
+  assign decoder_instruction=0;assign decoder_valid=0;assign decoder_done=0;assign decoder_paused=0;
+  assign layers_completed=0;assign decoder_cycles=0;assign layer_cycles=0;assign decoder_command_wait=0;assign decoder_data_wait=0;
+  assign decoder_req_valid=0;assign decoder_req_addr=0;assign decoder_req_beats=0;assign decoder_rsp_ready=0;
+  assign decoder_wr=0;assign decoder_rd=0;assign decoder_waddr=0;assign decoder_raddr=0;assign decoder_wdata=0;assign decoder_we=0;
+  assign feature_write_valid=0;assign feature_write_addr=0;assign feature_write_data=0;
+ end endgenerate
  reg [31:0] input_crc;
  function automatic [31:0] crc_row(input [31:0] seed,input [79:0] data);
   reg [31:0] c;integer i;
@@ -116,22 +153,24 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
  // Release columns only after that tile's last DW channel has completed.
  // Row 0 has no upper halo, so its third slot can be filled immediately.
  wire column_slot_free=COLUMN_PREFETCH && state==RUN && stage==0 && loaded==r0+2 && load_x<released_columns;
- wire load_start=busy && state!=FINISH && state!=RESIDUAL && !load_busy && !load_done && loaded<24 &&
+ wire load_start=busy && state!=FINISH && state!=RESIDUAL && state!=DECODER && !load_busy && !load_done && loaded<24 &&
                  (loaded<=r0+1 || column_slot_free);
  cyclegan_rgb_loader loader(.clk(clk),.rstn(rstn),.start(load_start),.frame_base(base),
   .tile_x(load_x),.tile_y(loaded),.busy(load_busy),.done(load_done),
-  .req_valid(req_valid),.req_ready(req_ready),.req_addr(req_addr),.req_beats(req_beats),
-  .rsp_valid(rsp_valid),.rsp_ready(rsp_ready),.rsp_data(rsp_data),
+  .req_valid(rgb_req_valid),.req_ready(req_ready && state!=DECODER),.req_addr(rgb_req_addr),.req_beats(rgb_req_beats),
+  .rsp_valid(rsp_valid && state!=DECODER),.rsp_ready(rgb_rsp_ready),.rsp_data(rsp_data),
   .cache_wr(load_wr),.cache_ready(load_ready),.cache_addr(load_addr),.cache_data(load_data),.cache_we(load_mask));
- mobilenet_unit #(.MODEL_PARAMS(1),.ENCODER_ONLY(!RESIDUAL_ENABLE),.RESIDUAL_PREFIX(RESIDUAL_ENABLE),.STREAM_WRITES(1)) unit(
-  .clk(clk),.reset(!rstn),.instruction(state==RESIDUAL ? residual_instruction : instruction),
-  .instruction_valid(state==RESIDUAL ? residual_valid : instruction_valid),
+ mobilenet_unit #(.MODEL_PARAMS(1),.ENCODER_ONLY(!RESIDUAL_ENABLE),.RESIDUAL_PREFIX(RESIDUAL_ENABLE),.DECODER_PREFIX(DECODER_ENABLE),.STREAM_WRITES(1),.STREAM_READS(DECODER_ENABLE)) unit(
+  .clk(clk),.reset(!rstn),.instruction(state==DECODER ? decoder_instruction : state==RESIDUAL ? residual_instruction : instruction),
+  .instruction_valid(state==DECODER ? decoder_valid : state==RESIDUAL ? residual_valid : instruction_valid),
   .instruction_ready(instruction_ready),.instruction_count(queued),
-  .host_cache_wr(load_wr),.host_cache_waddr(load_addr),.host_cache_wdata(load_data),.host_cache_wmask(load_mask),
-  .host_cache_rd(dbg_rd && (state==IDLE || paused)),.host_cache_raddr(dbg_addr),
-  .host_cache_rdata(dbg_data),.host_cache_rvalid(dbg_valid),.host_memory_ready(memory_ready),.host_stream_ready(load_ready),
+  .host_cache_wr(state==DECODER ? decoder_wr : load_wr),.host_cache_waddr(state==DECODER ? decoder_waddr : load_addr),
+  .host_cache_wdata(state==DECODER ? decoder_wdata : load_data),.host_cache_wmask(state==DECODER ? decoder_we : load_mask),
+  .host_cache_rd(state==DECODER && !paused ? decoder_rd : dbg_rd && (state==IDLE || paused)),
+  .host_cache_raddr(state==DECODER && !paused ? decoder_raddr : dbg_addr),
+  .host_cache_rdata(cache_rdata),.host_cache_rvalid(cache_rvalid),.host_memory_ready(memory_ready),.host_stream_ready(stream_ready),.host_read_ready(cache_read_ready),
   .host_param_wr(1'b0),.host_param_addr(15'd0),.host_param_data(16'd0),
-  .busy(core_busy),.done(core_done),.error_code(error_code));
+  .busy(core_busy),.done(core_done),.error_code(error_code),.writeback_valid(wb_valid),.writeback_addr(wb_addr),.writeback_opcode(wb_opcode));
  assign busy=state!=IDLE;
  assign raw_rows=loaded;assign stage1_rows=r0;assign stage2_rows=r1;assign stage3_rows=r2;
  always @(posedge clk) begin
@@ -204,7 +243,8 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0) (
       state<=SELECT;
      end
     end
-    RESIDUAL:if(residual_done) begin command_wait_cycles<=command_wait_cycles+residual_command_wait;state<=FINISH;end
+    RESIDUAL:if(residual_done) begin command_wait_cycles<=command_wait_cycles+residual_command_wait;state<=DECODER_ENABLE ? DECODER : FINISH;end
+    DECODER:if(decoder_done) begin command_wait_cycles<=command_wait_cycles+decoder_command_wait;data_wait_cycles<=data_wait_cycles+decoder_data_wait;state<=FINISH;end
     FINISH:begin done<=1;state<=IDLE;end
    endcase
   end
