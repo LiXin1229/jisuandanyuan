@@ -72,7 +72,7 @@ def main():
     timing['sdc_period_ns'] = staged_period
     assert resource['BRAM_total'] <= args.bram_budget
     assert timing['setup_slack_ns'] >= 0 and timing['hold_slack_ns'] >= 0
-    rom_resets = re.findall(r'defparam \\core/unit/model_parameters.parameters/g_packed.g_compact.g_(?:low|high)\[\d+\].u_rom \.RESET_RAM = ([^;]+);', netlist)
+    rom_resets = re.findall(r'defparam \\core/unit/model_parameters(?:\.full_rom)?\.parameters/g_packed.g_compact.g_(?:low|high)\[\d+\].u_rom \.RESET_RAM = ([^;]+);', netlist)
     assert len(rom_resets) == 25 and set(rom_resets) == {'"SYNC"'}
     trials = []
     for directory in args.timing_trial_directory:

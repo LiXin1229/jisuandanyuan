@@ -15,7 +15,7 @@ module tb_mobilenet_unit;
     wire host_memory_ready,host_cache_rvalid,busy,done;
     wire [799:0] host_cache_rdata;
     wire [3:0] error_code;
-    mobilenet_unit dut(.*);
+    mobilenet_unit dut(.*,.host_stream_ready());
     integer completed=0,consumed=0,cycle=0,op,address,aux,fd,rc,n;
     integer last_case=0;
     integer metrics,started=0;
