@@ -7,7 +7,7 @@ import shutil
 root=Path(__file__).resolve().parent.parent
 parser=argparse.ArgumentParser()
 parser.add_argument("--staging",type=Path)
-parser.add_argument("--top",choices=["mobilenet_bus_top","cyclegan_bus_top","mn_instruction_fifo"],default="mobilenet_bus_top")
+parser.add_argument("--top",choices=["mobilenet_bus_top","cyclegan_bus_top","mn_instruction_fifo","mn_cache"],default="mobilenet_bus_top")
 args=parser.parse_args()
 destination=args.staging or root / "build" / "efinity"
 destination.mkdir(parents=True,exist_ok=True)

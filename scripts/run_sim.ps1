@@ -6,12 +6,16 @@ try {
     & $Python sim/generate_vectors.py
     if ($LASTEXITCODE -ne 0) { throw 'Vector generation failed' }
     New-Item -ItemType Directory -Force -Path build/sim | Out-Null
-    foreach($log in @('input_mux','compact','dsp_quant_probe','fifo','dw_buffer','postprocess',
+    foreach($log in @('cache','input_mux','compact','dsp_quant_probe','fifo','dw_buffer','postprocess',
                      'unit','executor_cycles','executor4_timing','bus')) {
         Set-Content -LiteralPath "build/sim/$log.log" -Value '' -NoNewline
     }
     & $Python sim/prepare_models.py
     if ($LASTEXITCODE -ne 0) { throw 'Simulation model preparation failed' }
+    & iverilog -g2012 -s tb_cache -o build/sim/cache.vvp sim/tb_cache.sv rtl/mn_cache.sv yilisi_sim_models/efx_dpram10.v
+    if ($LASTEXITCODE -ne 0) { throw 'Cache compilation failed' }
+    & vvp build/sim/cache.vvp | Tee-Object -FilePath build/sim/cache.log
+    if ($LASTEXITCODE -ne 0) { throw 'Cache simulation failed' }
     & iverilog -g2012 -s tb_input_mux -o build/sim/input_mux.vvp sim/tb_input_mux.sv rtl/mn_input_mux.sv build/sim/efx_lut4_compat.sv
     if ($LASTEXITCODE -ne 0) { throw 'PE input mux compilation failed' }
     & vvp build/sim/input_mux.vvp | Tee-Object -FilePath build/sim/input_mux.log

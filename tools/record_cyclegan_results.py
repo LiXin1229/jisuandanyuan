@@ -28,8 +28,9 @@ def main():
     cli.add_argument('--unit-log', default='build/sim/unit.log')
     cli.add_argument('--bus-log', default='build/sim/bus.log')
     cli.add_argument('--metrics', type=Path, default=ROOT/'build/sim/commands.csv')
-    cli.add_argument('--output', type=Path, default=ROOT/'docs/analysis/cyclegan_iteration6_results.json')
-    cli.add_argument('--baseline', default='3d1dd44')
+    cli.add_argument('--output', type=Path, default=ROOT/'docs/analysis/cyclegan_iteration7_results.json')
+    cli.add_argument('--baseline', default='45fec6e')
+    cli.add_argument('--bram-budget', type=int, default=200)
     args = cli.parse_args()
     reports = ROOT/'build/efinity/outflow'
     stage = Path((ROOT/'build/efinity/staging_path.txt').read_text().strip())
@@ -46,6 +47,12 @@ def main():
     compact_masks = re.findall(r"defparam \\core/unit/compact/[^\n]+LUTMASK = 16'h([0-9a-f]{4});", netlist)
     assert len(compact_masks) == 700
     assert {mask: compact_masks.count(mask) for mask in set(compact_masks)} == {'7ffe': 500, 'fffe': 100, 'effe': 100}
+    cache_parameters = {}
+    for name,value in (('READ_WIDTH_B','5'), ('WRITE_WIDTH_B','5'),
+                       ('RESET_RAM_B','"SYNC"'), ('WRITE_MODE_B','"NO_CHANGE"')):
+        matches = re.findall(r'defparam \\core/unit/cache/plane\[\d+\]\.ram \.'+name+r' = ([^;]+);', netlist)
+        assert len(matches) == 160 and set(matches) == {value}
+        cache_parameters[name] = value
     number = lambda name: int(re.search(rf'{name}\s*:\s*(\d+)', mapping).group(1))
     resource = {name: number(name) for name in ('EFX_LUT4', 'EFX_FF', 'EFX_DSP48',
                                               'EFX_ADD', 'EFX_SRL8', 'EFX_RAM10', 'EFX_DPRAM10')}
@@ -53,10 +60,12 @@ def main():
     timing = (reports/'mobilenet.timing.rpt').read_text()
     setup = float(re.search(r'Setup \(Max\).*?clk\s+clk\s+10\.000\s+([\d.-]+)', timing, re.S).group(1))
     hold = float(re.search(r'Hold \(Min\).*?clk\s+clk\s+0\.000\s+([\d.-]+)', timing, re.S).group(1))
-    assert resource['BRAM_total'] <= 180 and setup >= 0 and hold >= 0
+    assert resource['BRAM_total'] <= args.bram_budget and setup >= 0 and hold >= 0
     with args.metrics.open() as stream:
         commands = list(csv.DictReader(stream))
     tests = {
+        'cache_rtl': passed('build/sim/cache.log', r'PASS cache:[^\r\n]+'),
+        'cache_mapped': passed('build/sim/cache_mapped.log', r'PASS cache:[^\r\n]+'),
         'core_rtl': passed(args.unit_log, r'PASS: \d+ cases, \d+ commands, \d+ cycles'),
         'bus_rtl': passed(args.bus_log, r'PASS bus:[^\r\n]+'),
         'model_assets_rtl': passed('build/sim/assets.log', r'PASS assets:[^\r\n]+'),
@@ -69,6 +78,14 @@ def main():
     tests['shared_dw_buffer'] = passed('build/sim/dw_buffer.log', r'PASS shared DW buffer:[^\r\n]+')
     tests['pe_input_mux'] = passed('build/sim/input_mux.log', r'PASS PE input mux:[^\r\n]+')
     tests['compact'] = passed('build/sim/compact.log', r'PASS compact:[^\r\n]+')
+    cache_preparation = json.loads((ROOT/'build/sim/cache_netlist.json').read_text())
+    assert cache_preparation['coalesced_output_alias_bits'] == 800
+    assert cache_preparation['source_sha256'] == sha(Path(cache_preparation['source']))
+    assert cache_preparation['prepared_sha256'] == sha(Path(cache_preparation['prepared']))
+    assert cache_preparation['cache_rtl_sha256'] == sha(ROOT/'rtl/mn_cache.sv')
+    assert cache_preparation['testbench_sha256'] == sha(ROOT/'sim/tb_cache.sv')
+    tests['cache_mapped']['netlist_preparation'] = cache_preparation
+    tests['cache_mapped']['compiled_simulator_sha256'] = sha(ROOT/'build/sim/cache_mapped.vvp')
     tests['instruction_fifo'] = passed('build/sim/fifo.log', r'PASS FIFO:[^\r\n]+')
     tests['instruction_fifo_mapped'] = passed('build/sim/fifo_mapped.log', r'PASS FIFO:[^\r\n]+')
     tests['all_instruction_cycles'] = passed('build/sim/executor_cycles.log', r'PASS cycle model:[^\r\n]+')
@@ -118,6 +135,8 @@ def main():
               'device': 'Ti60F225', 'efinity': '2026.1.132', 'timing_model': 'C4',
               'staged_rtl_matches_current': True, 'retiming': False,
               'synthesis_resources': resource,
+              'bram_budget': args.bram_budget,
+              'cache_native_planes': {'count': 160, 'parameters': cache_parameters},
               'pe_source_selection_lut4': len(input_masks),
               'signed32_compact_lut4': len(compact_masks),
               'internal_timing': {'target_mhz': 100, 'setup_slack_ns': setup,
