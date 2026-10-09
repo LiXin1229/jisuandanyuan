@@ -223,13 +223,15 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     mn_pe_array pes(.clk(clk),.reset(reset),.clear(state==CLEAR && !keep_acc),.in_valid(d1_valid),
         .in_last(d1_last),.in_data(input_tile),.weight(pe_weight),.out_data(pe_data),.out_valid(pe_valid),.out_last(pe_last));
     wire qvalid,pvalid,tanh_valid;
+    wire [1799:0] compact_data;
+    mn_compact compact(.in_data(pe_data),.out_data(compact_data));
     wire [799:0] qdata,tanh_data;
     wire [199:0] pdata;
     wire result_write=(state==WAIT_POST && (pool_enable ? pvalid : qvalid)) || (state==WAIT_TANH && tanh_valid);
     mn_tanh_tile tanh_post(.clk(clk),.rstn(!reset),.start(state==WAIT_PE && pe_valid && pe_last && !more_acc && tanh_enable),
-        .in_data(pe_data),.busy(),.valid(tanh_valid),.ready(result_write),.data(tanh_data));
+        .in_data(compact_data),.busy(),.valid(tanh_valid),.ready(result_write),.data(tanh_data));
     mn_postprocess post(.clk(clk),.reset(reset),.in_valid(state==WAIT_PE && pe_valid && pe_last && !more_acc && !tanh_enable),
-        .in_data(pe_data),.activation(activation),.valid_w(valid_w),.valid_h(valid_h),
+        .in_data(compact_data),.activation(activation),.valid_w(valid_w),.valid_h(valid_h),
         .tile_valid(qvalid),.tile_data(qdata),.pool_valid(pvalid),.pool_data(pdata));
     wire [199:0] sampled;
     generate for(p=0;p<25;p=p+1) begin: sampling

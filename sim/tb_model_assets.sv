@@ -14,7 +14,9 @@ module tb_model_assets;
     integer i,j,p,batch,code,packed_index;
     reg [15:0] held;
     mn_model_rom rom(.clk(clk),.rd_en(rd_en),.addr(addr),.data(data));
-    mn_tanh_tile tanh(.clk(clk),.rstn(rstn),.start(start),.in_data(in_data),
+    wire [1799:0] compact_data;
+    mn_compact compact(.in_data(in_data),.out_data(compact_data));
+    mn_tanh_tile tanh(.clk(clk),.rstn(rstn),.start(start),.in_data(compact_data),
         .busy(busy),.valid(valid),.ready(ready),.data(result));
     initial begin
         $readmemh("build/cyclegan_model/generator_params_q88.mem",expected);

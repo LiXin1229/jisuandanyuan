@@ -6,7 +6,7 @@ try {
     & $Python sim/generate_vectors.py
     if ($LASTEXITCODE -ne 0) { throw 'Vector generation failed' }
     New-Item -ItemType Directory -Force -Path build/sim | Out-Null
-    foreach($log in @('input_mux','dsp_quant_probe','fifo','dw_buffer','postprocess',
+    foreach($log in @('input_mux','compact','dsp_quant_probe','fifo','dw_buffer','postprocess',
                      'unit','executor_cycles','executor4_timing','bus')) {
         Set-Content -LiteralPath "build/sim/$log.log" -Value '' -NoNewline
     }
@@ -16,6 +16,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'PE input mux compilation failed' }
     & vvp build/sim/input_mux.vvp | Tee-Object -FilePath build/sim/input_mux.log
     if ($LASTEXITCODE -ne 0) { throw 'PE input mux simulation failed' }
+    & iverilog -g2012 -s tb_compact -o build/sim/compact.vvp sim/tb_compact.sv rtl/mn_compact.sv build/sim/efx_lut4_compat.sv
+    if ($LASTEXITCODE -ne 0) { throw 'Compact compilation failed' }
+    & vvp build/sim/compact.vvp | Tee-Object -FilePath build/sim/compact.log
+    if ($LASTEXITCODE -ne 0) { throw 'Compact simulation failed' }
     & iverilog -g2012 -s tb_dsp_quant_probe -o build/sim/dsp_quant_probe.vvp sim/tb_dsp_quant_probe.sv build/sim/efx_dsp48_compat.sv
     if ($LASTEXITCODE -ne 0) { throw 'DSP probe compilation failed' }
     & vvp -i build/sim/dsp_quant_probe.vvp | Tee-Object -FilePath build/sim/dsp_quant_probe.log
@@ -28,12 +32,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'DW buffer compilation failed' }
     & vvp -i build/sim/dw_buffer.vvp | Tee-Object -FilePath build/sim/dw_buffer.log
     if ($LASTEXITCODE -ne 0) { throw 'DW buffer simulation failed' }
-    & iverilog -g2012 -s tb_postprocess -I rtl -o build/sim/postprocess.vvp sim/tb_postprocess.sv rtl/mn_postprocess.sv
+    & iverilog -g2012 -s tb_postprocess -I rtl -o build/sim/postprocess.vvp sim/tb_postprocess.sv rtl/mn_compact.sv rtl/mn_postprocess.sv build/sim/efx_lut4_compat.sv
     if ($LASTEXITCODE -ne 0) { throw 'Postprocess compilation failed' }
     & vvp -i build/sim/postprocess.vvp | Tee-Object -FilePath build/sim/postprocess.log
     if ($LASTEXITCODE -ne 0) { throw 'Postprocess simulation failed' }
     $rtlSources = @('rtl/mn_cache.sv','rtl/mn_param_ram.sv','rtl/mn_instruction_fifo.sv',
-        'rtl/mn_dw_buffer.sv','rtl/mn_input_mux.sv','rtl/mn_pe_array.sv','rtl/mn_postprocess.sv',
+        'rtl/mn_dw_buffer.sv','rtl/mn_input_mux.sv','rtl/mn_pe_array.sv','rtl/mn_compact.sv','rtl/mn_postprocess.sv',
         'rtl/mn_model_rom.sv','rtl/mn_tanh.sv','rtl/mobilenet_unit.sv')
     & iverilog -g2012 -s tb_mobilenet_unit -I rtl -o build/sim/unit.vvp sim/tb_mobilenet_unit.sv @rtlSources conv_mem/conv_mem_unit/efx_ram10.v yilisi_sim_models/efx_dpram10.v build/sim/efx_dsp48_compat.sv build/sim/efx_lut4_compat.sv
     if ($LASTEXITCODE -ne 0) { throw 'RTL compilation failed' }

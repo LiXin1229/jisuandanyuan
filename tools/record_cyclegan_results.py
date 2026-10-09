@@ -28,8 +28,8 @@ def main():
     cli.add_argument('--unit-log', default='build/sim/unit.log')
     cli.add_argument('--bus-log', default='build/sim/bus.log')
     cli.add_argument('--metrics', type=Path, default=ROOT/'build/sim/commands.csv')
-    cli.add_argument('--output', type=Path, default=ROOT/'docs/analysis/cyclegan_iteration5_results.json')
-    cli.add_argument('--baseline', default='461f410')
+    cli.add_argument('--output', type=Path, default=ROOT/'docs/analysis/cyclegan_iteration6_results.json')
+    cli.add_argument('--baseline', default='3d1dd44')
     args = cli.parse_args()
     reports = ROOT/'build/efinity/outflow'
     stage = Path((ROOT/'build/efinity/staging_path.txt').read_text().strip())
@@ -43,6 +43,9 @@ def main():
     input_masks = re.findall(r"defparam \\core/unit/input_mux/[^\n]+LUTMASK = 16'h([0-9a-f]{4});", netlist)
     assert len(input_masks) == 800
     assert {mask: input_masks.count(mask) for mask in set(input_masks)} == {'00ca': 600, '0fca': 100, 'f0ca': 100}
+    compact_masks = re.findall(r"defparam \\core/unit/compact/[^\n]+LUTMASK = 16'h([0-9a-f]{4});", netlist)
+    assert len(compact_masks) == 700
+    assert {mask: compact_masks.count(mask) for mask in set(compact_masks)} == {'7ffe': 500, 'fffe': 100, 'effe': 100}
     number = lambda name: int(re.search(rf'{name}\s*:\s*(\d+)', mapping).group(1))
     resource = {name: number(name) for name in ('EFX_LUT4', 'EFX_FF', 'EFX_DSP48',
                                               'EFX_ADD', 'EFX_SRL8', 'EFX_RAM10', 'EFX_DPRAM10')}
@@ -65,6 +68,7 @@ def main():
         tests['dsp_primitive_probe'] = passed('build/sim/dsp_quant_probe.log', r'PASS W feedback:[^\r\n]+')
     tests['shared_dw_buffer'] = passed('build/sim/dw_buffer.log', r'PASS shared DW buffer:[^\r\n]+')
     tests['pe_input_mux'] = passed('build/sim/input_mux.log', r'PASS PE input mux:[^\r\n]+')
+    tests['compact'] = passed('build/sim/compact.log', r'PASS compact:[^\r\n]+')
     tests['instruction_fifo'] = passed('build/sim/fifo.log', r'PASS FIFO:[^\r\n]+')
     tests['instruction_fifo_mapped'] = passed('build/sim/fifo_mapped.log', r'PASS FIFO:[^\r\n]+')
     tests['all_instruction_cycles'] = passed('build/sim/executor_cycles.log', r'PASS cycle model:[^\r\n]+')
@@ -115,6 +119,7 @@ def main():
               'staged_rtl_matches_current': True, 'retiming': False,
               'synthesis_resources': resource,
               'pe_source_selection_lut4': len(input_masks),
+              'signed32_compact_lut4': len(compact_masks),
               'internal_timing': {'target_mhz': 100, 'setup_slack_ns': setup,
                                   'hold_slack_ns': hold, 'board_io_constrained': False},
               'tests': tests, 'full_network_instruction_model': frames,

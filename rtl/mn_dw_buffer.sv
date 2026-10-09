@@ -14,15 +14,17 @@ module mn_dw_buffer (
     (* syn_keep=1 *) wire move_left=rotate_en && rotate_dir==0 && !reset;
     (* syn_keep=1 *) wire move_right=rotate_en && rotate_dir==1 && !reset;
     (* syn_keep=1 *) wire move_up=rotate_en && rotate_dir==2 && !reset;
-    (* syn_keep=1 *) wire [8:0] select_load;
-    (* syn_keep=1 *) wire [15:0] select_column,select_row;
+    // CE selects the destination owner/row/column. Data masks select only
+    // the active phase, allowing equal tile/column pairs to share one LUT.
+    (* syn_keep=1 *) wire data_load=load_en && !load_zero && !reset;
+    (* syn_keep=1 *) wire data_column=pad_en && !pad_axis && !pad_zero && !reset;
+    (* syn_keep=1 *) wire data_row=pad_en && pad_axis && !pad_zero && !reset;
+    wire [7:0] load_column[0:159];
     // A radius-three reflection source is at most local x/y=8 (grid 11).
     // For tiny tiles a reflected coordinate may reach the preceding halo.
     (* syn_keep=1 *) wire [11:0] select_pad=12'b1<<pad_src;
     genvar p,j;
     generate for(j=0;j<16;j=j+1) begin: padding_source
-        assign select_column[j]=pad_en && !pad_axis && pad_dst==j && !pad_zero && !reset;
-        assign select_row[j]=pad_en && pad_axis && pad_dst==j && !pad_zero && !reset;
         reg [7:0] col_value,row_value;
         integer k;
         always @* begin
@@ -35,23 +37,24 @@ module mn_dw_buffer (
         assign column[j]=col_value;
         assign row[j]=row_value;
     end
-    for(j=0;j<9;j=j+1) begin: load_decode
-        assign select_load[j]=load_en && load_owner==j && !load_zero && !reset;
+    for(p=0;p<160;p=p+1) begin: shared_load_column
+        localparam R=p/10,X=p%10,Y=R<3 ? R+7 : R<13 ? R-3 : R-13;
+        localparam PACK=((Y/5)*2+X/5)*25+(Y%5)*5+X%5;
+        (* syn_keep=1 *) wire [7:0] pair=(tile[PACK*8+:8]&{8{data_load}}) |
+            (column[R]&{8{data_column}});
+        assign load_column[p]=pair;
     end
     for(p=0;p<256;p=p+1) begin: buffer_cell
         localparam R=p/16,C=p%16;
         localparam OWNER=(R<3 ? 0 : R<13 ? 1 : 2)*3+(C<3 ? 0 : C<13 ? 1 : 2);
-        localparam Y=R<3 ? R+7 : R<13 ? R-3 : R-13;
         localparam X=C<3 ? C+7 : C<13 ? C-3 : C-13;
-        localparam PACK=((Y/5)*2+X/5)*25+(Y%5)*5+X%5;
         wire put_tile=load_en && load_owner==OWNER && !reset;
         wire put_col=pad_en && !pad_axis && pad_dst==C && !reset;
         wire put_row=pad_en && pad_axis && pad_dst==R && !reset;
         // These phases are mutually exclusive. One-hot terms avoid a
         // cascaded priority mux on every bit of the 256-byte register grid.
-        (* syn_keep=1 *) wire [7:0] pair0=(tile[PACK*8+:8]&{8{select_load[OWNER]}}) |
-            (column[R]&{8{select_column[C]}});
-        (* syn_keep=1 *) wire [7:0] pair1=(row[C]&{8{select_row[R]}}) |
+        wire [7:0] pair0=load_column[R*10+X];
+        (* syn_keep=1 *) wire [7:0] pair1=(row[C]&{8{data_row}}) |
             (cell_data[R*16+(C+1)%16]&{8{move_left}});
         (* syn_keep=1 *) wire [7:0] pair2=(cell_data[R*16+(C+15)%16]&{8{move_right}}) |
             (cell_data[((R+1)%16)*16+C]&{8{move_up}});

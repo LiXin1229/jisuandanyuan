@@ -2,7 +2,7 @@
 module mn_postprocess (
     input wire clk, reset,
     input wire in_valid,
-    input wire [3199:0] in_data,
+    input wire [1799:0] in_data,
     input wire [1:0] activation,
     input wire [3:0] valid_w, valid_h,
     output reg tile_valid,
@@ -33,8 +33,7 @@ module mn_postprocess (
     endfunction
     genvar p,g;
     generate for(p=0;p<100;p=p+1) begin: pixel
-        wire [31:0] s=in_data[p*32+:32];
-        wire [17:0] compact={s[31] ? !(&s[30:15]) : |s[30:15],s[31],s[15:0]};
+        wire [17:0] compact=in_data[p*18+:18];
         localparam R=p/10,C=p%10,PACK=((R/5)*2+C/5)*25+(R%5)*5+C%5;
         assign quantized[p]=quant(compact,activation);
         assign tile_data[PACK*8+:8]=q[p];

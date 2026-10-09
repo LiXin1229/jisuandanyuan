@@ -11,7 +11,11 @@ module tb_postprocess;
     integer batch,act,p,r,c,k,index,expected,max_value,checks=0;
     reg signed [31:0] source[0:99];
     integer golden[0:99];
-    mn_postprocess dut(.*);
+    wire [1799:0] compact_data;
+    mn_compact compact(.in_data(in_data),.out_data(compact_data));
+    mn_postprocess dut(.in_data(compact_data),.clk(clk),.reset(reset),.in_valid(in_valid),
+        .activation(activation),.valid_w(valid_w),.valid_h(valid_h),
+        .tile_valid(tile_valid),.tile_data(tile_data),.pool_valid(pool_valid),.pool_data(pool_data));
     task check_tile;
         begin
             in_valid=1;@(negedge clk);in_valid=0;

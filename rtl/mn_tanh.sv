@@ -28,13 +28,8 @@ endmodule
 
 // DSP outputs remain stable until lookup completes; no 100x36 result copy.
 // Decode the lane index once; four OR-reduced banks share the selection bits.
-module mn_tanh_tile(input wire clk,rstn,start,input wire [3199:0] in_data,
+module mn_tanh_tile(input wire clk,rstn,start,input wire [1799:0] in_data,
  output wire busy,output reg valid,input wire ready,output wire [799:0] data);
- wire [35:0] sum[0:99];
- genvar lane;
- generate for(lane=0;lane<100;lane=lane+1) begin:g_sum
- assign sum[lane]={{4{in_data[lane*32+31]}},in_data[lane*32+:32]};
- end endgenerate
  reg active=0;reg bank_d=0;reg [5:0] issue=0;
  // Values outside signed 16-bit range already saturate the Tanh address.
  // Select {overflow,true_sign,low16} instead of the full signed result.
@@ -57,7 +52,7 @@ module mn_tanh_tile(input wire clk,rstn,start,input wire [3199:0] in_data,
  mn_tanh_bram_dual u_lut(.clk(clk),.rd_en(v[2]),.addr0(addr_q[0]),.addr1(addr_q[1]),.data0(rom_q[0]),.data1(rom_q[1]));
  genvar g;
  generate for(g=0;g<100;g=g+1) begin:g_compact
-  assign compact[g]={sum[g][31] ? !(&sum[g][30:15]) : |sum[g][30:15],sum[g][31],sum[g][15:0]};
+  assign compact[g]=in_data[g*18+:18];
  end
  for(g=0;g<4;g=g+1) begin:g_select
   reg [17:0] selected;integer k;

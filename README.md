@@ -2,9 +2,10 @@
 
 目标器件 Ti60 F225，Efinity 2026.1；100 路 DSP、10×10 tile、signed8 Q4.4 数据和 signed16 Q8.8 参数。
 
-当前版本支持 `netG_B_epoch11.pth` 的 7×7 输出生成器，采用 checkpoint 的固定 BN 统计生成 affine 参数。整网调度在主机端运行，编码、残差、四相转置卷积和 Tanh 复用同一计算单元。核心及全部缓存/模型参数/Tanh 综合为 **147 BRAM、22883 LUT4、5241 FF、100 DSP**；100MHz 内部时序通过布局布线检查。PW 无舍入执行时间为 `Cin+8` 拍；共享缓冲的 3×3 / 7×7 DW 分别连续发射 9 / 49 次 MAC，无填充执行时间为 30 / 66 拍。需要修补的边每个增加 3 拍，排队弹出间隔在执行时间基础上加 1 拍。
+当前版本支持 `netG_B_epoch11.pth` 的 7×7 输出生成器，采用 checkpoint 的固定 BN 统计生成 affine 参数。整网调度在主机端运行，编码、残差、四相转置卷积和 Tanh 复用同一计算单元。核心及全部缓存/模型参数/Tanh 综合为 **147 BRAM、21765 LUT4、5241 FF、100 DSP**；100MHz 内部时序通过布局布线检查。PW 无舍入执行时间为 `Cin+8` 拍；共享缓冲的 3×3 / 7×7 DW 分别连续发射 9 / 49 次 MAC，无填充执行时间为 30 / 66 拍。需要修补的边每个增加 3 拍，排队弹出间隔在执行时间基础上加 1 拍。
 
-- [当前整字 mux 可行性与综合对照](docs/mux_optimization_iteration5.md)
+- [当前缓冲 CE 解耦、数据共享与 compact 优化](docs/buffer_optimization_iteration6.md)
+- [第五轮整字 mux 可行性与综合对照](docs/mux_optimization_iteration5.md)
 - [共享 3×3/7×7 缓冲、指令时间及第四轮资源优化](docs/executor_efficiency_iteration4.md)
 - [第三轮一拍后处理与专用 3×3 快速路径](docs/executor_efficiency_iteration3.md)（历史版本）
 - [第二轮执行器效率记录](docs/executor_efficiency_iteration2.md)（历史版本）

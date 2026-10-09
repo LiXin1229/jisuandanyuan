@@ -1,0 +1,193 @@
+{
+  "baseline_git_commit": "3d1dd44",
+  "top": "cyclegan_bus_top",
+  "device": "Ti60F225",
+  "efinity": "2026.1.132",
+  "retiming": false,
+  "trials": [
+    {
+      "name": "baseline",
+      "resources": {
+        "EFX_LUT4": 22883,
+        "EFX_FF": 5241,
+        "EFX_DSP48": 100,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 65,
+        "EFX_DPRAM10": 82
+      },
+      "buffer_lut4": 10734,
+      "report_sha256": "a9212912052938518c64341aff94ebe149f226c48e64a44a9db75976c12f8cf9",
+      "staged_rtl_sha256": {
+        "cyclegan_bus_top.sv": "4f5bd6ba405af202f8e91905cd10ef472a42cade8b05424db5582b856966d201",
+        "mn_cache.sv": "395af25c61bcb1a23c005ce69d71cf23f772defdd09d6f6919200de6e1c3ce17",
+        "mn_dw_buffer.sv": "9590ecc43a1ba30150678854f4d32daf747314ba92a8fc711931b840fbe4bbca",
+        "mn_input_mux.sv": "00d017fb5fca1a319afa410af1a9e4a449fa4ed018a20e1f357e259810e9a13b",
+        "mn_instruction_fifo.sv": "40b7810b326af113384f45def9e63d65409256f616a1527cdfa87cef1ff58992",
+        "mn_model_rom.sv": "6fa4f14da9d46980ad3d23d5084769368abead0f279d007afa141ebba216019e",
+        "mn_param_ram.sv": "d372d31db182b38b5b8c3a29ec6b0879f3e7b8057e96465089b4e05c22c4b742",
+        "mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+        "mn_postprocess.sv": "7b3e4087a3623d5e777fea3a836cac9a5d0227b61ca8b7a2bce5d9dc2ca9a0af",
+        "mn_tanh.sv": "b831530ce2a8687640b6f9f5ede2efddb94bb4a84814ab2e80967c601076c3f1",
+        "mobilenet_bus_top.sv": "98bb881bb50aec92aaae46cadb7aec4210fc60e3176a697cc5fb0f8361c19ac4",
+        "mobilenet_unit.sv": "4ec857733e343267e98e2ad0939f14a9665dd4d68f3c963c1df059005550ee29"
+      }
+    },
+    {
+      "name": "priority_mux_same_ce",
+      "resources": {
+        "EFX_LUT4": 24103,
+        "EFX_FF": 5241,
+        "EFX_DSP48": 100,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 65,
+        "EFX_DPRAM10": 82
+      },
+      "buffer_lut4": 11682,
+      "report_sha256": "b8377bc8a7f2f675f478ed6f516235dda6c60085e83e74675a6a743b0d3917ea",
+      "staged_rtl_sha256": {
+        "cyclegan_bus_top.sv": "4f5bd6ba405af202f8e91905cd10ef472a42cade8b05424db5582b856966d201",
+        "mn_cache.sv": "395af25c61bcb1a23c005ce69d71cf23f772defdd09d6f6919200de6e1c3ce17",
+        "mn_dw_buffer.sv": "702f225c547186c24d0b4dd96261427e39bada56c5328b4351691d95af105814",
+        "mn_input_mux.sv": "00d017fb5fca1a319afa410af1a9e4a449fa4ed018a20e1f357e259810e9a13b",
+        "mn_instruction_fifo.sv": "40b7810b326af113384f45def9e63d65409256f616a1527cdfa87cef1ff58992",
+        "mn_model_rom.sv": "6fa4f14da9d46980ad3d23d5084769368abead0f279d007afa141ebba216019e",
+        "mn_param_ram.sv": "d372d31db182b38b5b8c3a29ec6b0879f3e7b8057e96465089b4e05c22c4b742",
+        "mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+        "mn_postprocess.sv": "7b3e4087a3623d5e777fea3a836cac9a5d0227b61ca8b7a2bce5d9dc2ca9a0af",
+        "mn_tanh.sv": "b831530ce2a8687640b6f9f5ede2efddb94bb4a84814ab2e80967c601076c3f1",
+        "mobilenet_bus_top.sv": "98bb881bb50aec92aaae46cadb7aec4210fc60e3176a697cc5fb0f8361c19ac4",
+        "mobilenet_unit.sv": "4ec857733e343267e98e2ad0939f14a9665dd4d68f3c963c1df059005550ee29"
+      }
+    },
+    {
+      "name": "indexed_padding_same_ce",
+      "resources": {
+        "EFX_LUT4": 23362,
+        "EFX_FF": 5241,
+        "EFX_DSP48": 100,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 65,
+        "EFX_DPRAM10": 82
+      },
+      "buffer_lut4": 11250,
+      "report_sha256": "087bcc06a0554a98394b44050322dcff0bb58d8ef4ad963ab119e4379ada1bd2",
+      "staged_rtl_sha256": {
+        "cyclegan_bus_top.sv": "4f5bd6ba405af202f8e91905cd10ef472a42cade8b05424db5582b856966d201",
+        "mn_cache.sv": "395af25c61bcb1a23c005ce69d71cf23f772defdd09d6f6919200de6e1c3ce17",
+        "mn_dw_buffer.sv": "fd4d70ab1bed05d7eba6ca0b99bf5173252a9dfe2cf84f01dde5ca32d2e63501",
+        "mn_input_mux.sv": "00d017fb5fca1a319afa410af1a9e4a449fa4ed018a20e1f357e259810e9a13b",
+        "mn_instruction_fifo.sv": "40b7810b326af113384f45def9e63d65409256f616a1527cdfa87cef1ff58992",
+        "mn_model_rom.sv": "6fa4f14da9d46980ad3d23d5084769368abead0f279d007afa141ebba216019e",
+        "mn_param_ram.sv": "d372d31db182b38b5b8c3a29ec6b0879f3e7b8057e96465089b4e05c22c4b742",
+        "mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+        "mn_postprocess.sv": "7b3e4087a3623d5e777fea3a836cac9a5d0227b61ca8b7a2bce5d9dc2ca9a0af",
+        "mn_tanh.sv": "b831530ce2a8687640b6f9f5ede2efddb94bb4a84814ab2e80967c601076c3f1",
+        "mobilenet_bus_top.sv": "98bb881bb50aec92aaae46cadb7aec4210fc60e3176a697cc5fb0f8361c19ac4",
+        "mobilenet_unit.sv": "4ec857733e343267e98e2ad0939f14a9665dd4d68f3c963c1df059005550ee29"
+      }
+    },
+    {
+      "name": "shared_seven_lut_compact",
+      "resources": {
+        "EFX_LUT4": 22572,
+        "EFX_FF": 5241,
+        "EFX_DSP48": 100,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 65,
+        "EFX_DPRAM10": 82
+      },
+      "buffer_lut4": 10723,
+      "report_sha256": "e1f8ec36facb7544011f5ed8f13d78eac1ce7f536daa284434e6afb52f3f8405",
+      "staged_rtl_sha256": {
+        "cyclegan_bus_top.sv": "4f5bd6ba405af202f8e91905cd10ef472a42cade8b05424db5582b856966d201",
+        "mn_cache.sv": "395af25c61bcb1a23c005ce69d71cf23f772defdd09d6f6919200de6e1c3ce17",
+        "mn_compact.sv": "88c64acd9beeb34b4fc847c13cc1a16b312f9ba567d1911c5fcbacbb7b3b76b0",
+        "mn_dw_buffer.sv": "9590ecc43a1ba30150678854f4d32daf747314ba92a8fc711931b840fbe4bbca",
+        "mn_input_mux.sv": "00d017fb5fca1a319afa410af1a9e4a449fa4ed018a20e1f357e259810e9a13b",
+        "mn_instruction_fifo.sv": "40b7810b326af113384f45def9e63d65409256f616a1527cdfa87cef1ff58992",
+        "mn_model_rom.sv": "6fa4f14da9d46980ad3d23d5084769368abead0f279d007afa141ebba216019e",
+        "mn_param_ram.sv": "d372d31db182b38b5b8c3a29ec6b0879f3e7b8057e96465089b4e05c22c4b742",
+        "mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+        "mn_postprocess.sv": "7df8637fa2e6b9306684b3cf308831e9ced85cf81394a39738c682cc307f66b9",
+        "mn_tanh.sv": "c0d92dc594e613ef65155b82209cc3bd67c613d29729258a942093833c3c339b",
+        "mobilenet_bus_top.sv": "98bb881bb50aec92aaae46cadb7aec4210fc60e3176a697cc5fb0f8361c19ac4",
+        "mobilenet_unit.sv": "a8938a16ec7bf8c4abaf3482717a53d06b3619991067545d57f3bedd9f4435c5"
+      }
+    },
+    {
+      "name": "compact_plus_shared_buffer_data",
+      "resources": {
+        "EFX_LUT4": 21765,
+        "EFX_FF": 5241,
+        "EFX_DSP48": 100,
+        "EFX_SRL8": 134,
+        "EFX_RAM10": 65,
+        "EFX_DPRAM10": 82
+      },
+      "buffer_lut4": 9913,
+      "report_sha256": "3fb05ecde0b30d321be247f91dc1b8837b237c944d61ec55b9c2b72d4d740d2b",
+      "staged_rtl_sha256": {
+        "cyclegan_bus_top.sv": "4f5bd6ba405af202f8e91905cd10ef472a42cade8b05424db5582b856966d201",
+        "mn_cache.sv": "395af25c61bcb1a23c005ce69d71cf23f772defdd09d6f6919200de6e1c3ce17",
+        "mn_compact.sv": "88c64acd9beeb34b4fc847c13cc1a16b312f9ba567d1911c5fcbacbb7b3b76b0",
+        "mn_dw_buffer.sv": "5102aa6224d4b80009ff1ee260978cbc31625071dd60465636e29a344ab51422",
+        "mn_input_mux.sv": "00d017fb5fca1a319afa410af1a9e4a449fa4ed018a20e1f357e259810e9a13b",
+        "mn_instruction_fifo.sv": "40b7810b326af113384f45def9e63d65409256f616a1527cdfa87cef1ff58992",
+        "mn_model_rom.sv": "6fa4f14da9d46980ad3d23d5084769368abead0f279d007afa141ebba216019e",
+        "mn_param_ram.sv": "d372d31db182b38b5b8c3a29ec6b0879f3e7b8057e96465089b4e05c22c4b742",
+        "mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+        "mn_postprocess.sv": "7df8637fa2e6b9306684b3cf308831e9ced85cf81394a39738c682cc307f66b9",
+        "mn_tanh.sv": "c0d92dc594e613ef65155b82209cc3bd67c613d29729258a942093833c3c339b",
+        "mobilenet_bus_top.sv": "98bb881bb50aec92aaae46cadb7aec4210fc60e3176a697cc5fb0f8361c19ac4",
+        "mobilenet_unit.sv": "a8938a16ec7bf8c4abaf3482717a53d06b3619991067545d57f3bedd9f4435c5"
+      }
+    }
+  ],
+  "baseline_compact_shared_reduction_evidence": {
+    "lanes_with_full_high_reductions": 100,
+    "full_high_reduction_roots": 232,
+    "lane0_candidates": [
+      {
+        "lane": 0,
+        "net": "n32957",
+        "instance": "LUT__56662",
+        "cone_luts": 5,
+        "uses": [
+          "LUT__56663",
+          "LUT__56676",
+          "LUT__59588"
+        ]
+      },
+      {
+        "lane": 0,
+        "net": "n32963",
+        "instance": "LUT__56668",
+        "cone_luts": 5,
+        "uses": [
+          "LUT__56669",
+          "LUT__56675",
+          "LUT__56678",
+          "LUT__56679",
+          "LUT__59588"
+        ]
+      }
+    ]
+  },
+  "baseline_netlist_sha256": "c18f78f6e0a39d138a345e3f9cb6750acad1e71482edac5d1b03402dc76e90dd",
+  "bank2_port_evidence": {
+    "sdp_write_data_ports": 1,
+    "tdp_legal_widths": [
+      1,
+      2,
+      4,
+      5,
+      8,
+      10
+    ],
+    "direct_tdp_replacement_total_bram": 187,
+    "installed_vendor_models_sha256": {
+      "efx_ram10.v": "dd8db45116a67b9754920856dc380eb2dc73ca51e0a6a62cc74cda01c0e31a33",
+      "efx_dpram10.v": "c7e39233de0a437fd0d43d83ce60dce10b3bd305c59cfcacfb5eac2fe916bcf9"
+    }
+  }
+}
