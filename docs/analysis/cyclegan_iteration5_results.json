@@ -1,0 +1,452 @@
+{
+  "recorded_utc": "2026-10-09T09:50:04.209818+00:00",
+  "baseline_git_commit": "461f410",
+  "top": "cyclegan_bus_top",
+  "device": "Ti60F225",
+  "efinity": "2026.1.132",
+  "timing_model": "C4",
+  "staged_rtl_matches_current": true,
+  "retiming": false,
+  "synthesis_resources": {
+    "EFX_LUT4": 22883,
+    "EFX_FF": 5241,
+    "EFX_DSP48": 100,
+    "EFX_ADD": 255,
+    "EFX_SRL8": 134,
+    "EFX_RAM10": 65,
+    "EFX_DPRAM10": 82,
+    "BRAM_total": 147
+  },
+  "pe_source_selection_lut4": 800,
+  "internal_timing": {
+    "target_mhz": 100,
+    "setup_slack_ns": 1.343,
+    "hold_slack_ns": 0.028,
+    "board_io_constrained": false
+  },
+  "tests": {
+    "core_rtl": {
+      "log": "build/sim/unit.log",
+      "sha256": "3ab7593f8a1d98d36b69fba02b57969f019413917bd8a70d5307a45b36d10015",
+      "summary": "PASS: 201 cases, 252 commands, 21205 cycles",
+      "cases": 201,
+      "commands": 252,
+      "cycles": 21205,
+      "expected_error_commands": 9,
+      "metrics_sha256": "d0c7f5866c156339d3bcffed4515c5b9a80692e1b21027684ca8335c626071b6",
+      "execution": {
+        "jobs": 8,
+        "case_count": 201,
+        "vectors_sha256": "75934d9643a37265885ebf9e3d0971b09278e90797980cd28274a2de04671049",
+        "case_scope": "Each case initializes its own inputs; commands within a case retain queue/accumulator state.",
+        "cycles_scope": "Sum of testbench cycles; parallel runs include one reset per shard.",
+        "compiled_simulator_sha256": "d923773d395c64ac1d80074d891feb040e40ecc8eb2b6a5d02a3c748b843f0a7"
+      }
+    },
+    "bus_rtl": {
+      "log": "build/sim/bus.log",
+      "sha256": "319cca9583832f9468030b3ca7bb8c7347a384bd6380c5f31966382c5409f0e6",
+      "summary": "PASS bus: PW/DW golden, staging, backpressure, shared 7x7/3x3 DW reset, bank2 row masks, invalid address isolation"
+    },
+    "model_assets_rtl": {
+      "log": "build/sim/assets.log",
+      "sha256": "e596b4bc22e4edfa4f66d884012bd289b559948b3b82d5100a79160c05eb83a6",
+      "summary": "PASS assets: 22016 native ROM words, stop-read hold, 4096 Tanh addresses, backpressure, extremes and ties"
+    },
+    "model_bus_rtl": {
+      "log": "build/sim/model_bus.log",
+      "sha256": "236c139fa3e97438d6aaf77369ac5f76ab19fe2e7d1857800575db528df743df",
+      "summary": "PASS epoch11 bus: fixed ROM DW/PW/BN/CONV-Tanh/ADD, 7x7 CONV-Tanh, third bank, extended parameters; 6 commands, 860 cycles"
+    },
+    "model_bus_mapped": {
+      "log": "build/sim/model_postmap.log",
+      "sha256": "236c139fa3e97438d6aaf77369ac5f76ab19fe2e7d1857800575db528df743df",
+      "summary": "PASS epoch11 bus: fixed ROM DW/PW/BN/CONV-Tanh/ADD, 7x7 CONV-Tanh, third bank, extended parameters; 6 commands, 860 cycles"
+    },
+    "postprocess_rtl": {
+      "log": "build/sim/postprocess.log",
+      "sha256": "d44175002790d328cfbcc6c4e2e9feaf5df0f57b34801820f9054093437ce39a",
+      "summary": "PASS parallel postprocess: 205800 pixels, signed16 exhaustive, signed32 extremes, partial pooling and reset"
+    },
+    "dsp_primitive_probe": {
+      "log": "build/sim/dsp_quant_probe.log",
+      "sha256": "31924e0251f2cb66b2d4df7b87439c8d0e9fe2cff670379e8f96f6dc2da51b41",
+      "summary": "PASS W feedback: raw sum512, shifted output2, shift0 restores raw output512"
+    },
+    "shared_dw_buffer": {
+      "log": "build/sim/dw_buffer.log",
+      "sha256": "454e348e6115222778d863f2dd21234d45e6678fb1004f7ce8cd397967f0eded",
+      "summary": "PASS shared DW buffer: 216408 pixels, five kernel shapes, snake rotations, exhaustive padding and reuse"
+    },
+    "pe_input_mux": {
+      "log": "build/sim/input_mux.log",
+      "sha256": "143f9baa9dca0f1544f434024fc373cb73edbcdbc8fcd60cc2745420d6d95da2",
+      "summary": "PASS PE input mux: 104000 pixels, exhaustive binary truth tables and packed lane patterns"
+    },
+    "instruction_fifo": {
+      "log": "build/sim/fifo.log",
+      "sha256": "d3d945b3b63a1bfc8ec26e81b5530ae1d953ca770eceff8497fe7dd08bc2dfaa",
+      "summary": "PASS FIFO: 1768 pushes, 1710 pops, 739 simultaneous cycles, full/empty and repeated reset"
+    },
+    "instruction_fifo_mapped": {
+      "log": "build/sim/fifo_mapped.log",
+      "sha256": "d3d945b3b63a1bfc8ec26e81b5530ae1d953ca770eceff8497fe7dd08bc2dfaa",
+      "summary": "PASS FIFO: 1768 pushes, 1710 pops, 739 simultaneous cycles, full/empty and repeated reset"
+    },
+    "all_instruction_cycles": {
+      "log": "build/sim/executor_cycles.log",
+      "sha256": "5c1ba8a43fad51f0ab3c5972b3ac3b96a39aa488c5fe40a8309eac158dd3db22",
+      "summary": "PASS cycle model: 252 commands, execution/rounding/padding/raw/Tanh latencies"
+    },
+    "executor_timing": {
+      "log": "build/sim/executor4_timing.log",
+      "sha256": "8dd1c4b6537ca4583424626aba62553f34c32fb1bad0880a70efc0a1419ba5ee",
+      "summary": "PASS: 84 cases, 6 commands, 331 cycles",
+      "scope": "Unpadded 3x3 and 7x7 DW; four queued single-channel PW commands"
+    }
+  },
+  "full_network_instruction_model": [
+    {
+      "validation": "full encoded-instruction integer model; not RTL or FPGA",
+      "checkpoint_sha256": "7d6aaac3a6192dddde81602e6120d1aa4dc732690efb8c908cb4757e12dc9a8b",
+      "counts": {
+        "row_writes": 197400,
+        "DW": 8064,
+        "PW": 14208,
+        "NORM": 28416,
+        "tile_reads": 24960,
+        "tile_writes": 111328,
+        "ADD": 3456,
+        "CONV": 116736
+      },
+      "layers_checked": 16,
+      "final_values_checked": 230400,
+      "all_layers_equal": true,
+      "feature_storage": "host memory",
+      "cache_reserved_window_addresses": [
+        1487,
+        1535
+      ],
+      "input": "test.jpg"
+    },
+    {
+      "validation": "full encoded-instruction integer model; not RTL or FPGA",
+      "checkpoint_sha256": "7d6aaac3a6192dddde81602e6120d1aa4dc732690efb8c908cb4757e12dc9a8b",
+      "counts": {
+        "row_writes": 197400,
+        "DW": 8064,
+        "PW": 14208,
+        "NORM": 28416,
+        "tile_reads": 24960,
+        "tile_writes": 111328,
+        "ADD": 3456,
+        "CONV": 116736
+      },
+      "layers_checked": 16,
+      "final_values_checked": 230400,
+      "all_layers_equal": true,
+      "feature_storage": "host memory",
+      "cache_reserved_window_addresses": [
+        1487,
+        1535
+      ],
+      "input": "inverted test.jpg"
+    }
+  ],
+  "full_network_instruction_model_reused_from_previous_iteration": true,
+  "executor_timing": {
+    "dw3_pop": 44,
+    "dw3_mac_cycle_and_tap": [
+      [
+        60,
+        0
+      ],
+      [
+        61,
+        1
+      ],
+      [
+        62,
+        2
+      ],
+      [
+        63,
+        5
+      ],
+      [
+        64,
+        4
+      ],
+      [
+        65,
+        3
+      ],
+      [
+        66,
+        6
+      ],
+      [
+        67,
+        7
+      ],
+      [
+        68,
+        8
+      ]
+    ],
+    "dw3_done": 74,
+    "dw7_pop": 199,
+    "dw7_mac_cycle_and_tap": [
+      [
+        211,
+        0
+      ],
+      [
+        212,
+        1
+      ],
+      [
+        213,
+        2
+      ],
+      [
+        214,
+        3
+      ],
+      [
+        215,
+        4
+      ],
+      [
+        216,
+        5
+      ],
+      [
+        217,
+        6
+      ],
+      [
+        218,
+        13
+      ],
+      [
+        219,
+        12
+      ],
+      [
+        220,
+        11
+      ],
+      [
+        221,
+        10
+      ],
+      [
+        222,
+        9
+      ],
+      [
+        223,
+        8
+      ],
+      [
+        224,
+        7
+      ],
+      [
+        225,
+        14
+      ],
+      [
+        226,
+        15
+      ],
+      [
+        227,
+        16
+      ],
+      [
+        228,
+        17
+      ],
+      [
+        229,
+        18
+      ],
+      [
+        230,
+        19
+      ],
+      [
+        231,
+        20
+      ],
+      [
+        232,
+        27
+      ],
+      [
+        233,
+        26
+      ],
+      [
+        234,
+        25
+      ],
+      [
+        235,
+        24
+      ],
+      [
+        236,
+        23
+      ],
+      [
+        237,
+        22
+      ],
+      [
+        238,
+        21
+      ],
+      [
+        239,
+        28
+      ],
+      [
+        240,
+        29
+      ],
+      [
+        241,
+        30
+      ],
+      [
+        242,
+        31
+      ],
+      [
+        243,
+        32
+      ],
+      [
+        244,
+        33
+      ],
+      [
+        245,
+        34
+      ],
+      [
+        246,
+        41
+      ],
+      [
+        247,
+        40
+      ],
+      [
+        248,
+        39
+      ],
+      [
+        249,
+        38
+      ],
+      [
+        250,
+        37
+      ],
+      [
+        251,
+        36
+      ],
+      [
+        252,
+        35
+      ],
+      [
+        253,
+        42
+      ],
+      [
+        254,
+        43
+      ],
+      [
+        255,
+        44
+      ],
+      [
+        256,
+        45
+      ],
+      [
+        257,
+        46
+      ],
+      [
+        258,
+        47
+      ],
+      [
+        259,
+        48
+      ]
+    ],
+    "dw7_done": 265,
+    "pw_queued_pops": [
+      282,
+      292,
+      302,
+      312
+    ],
+    "pw_dones": [
+      291,
+      301,
+      311,
+      321
+    ],
+    "execution_cycles": [
+      30,
+      66,
+      9,
+      9,
+      9,
+      9
+    ],
+    "queued_switch_cycles": 1
+  },
+  "host_protocol": {
+    "row_commits_checked": 70,
+    "addresses_checked": 7,
+    "scope": "Python protocol model; separate RTL bus tests"
+  },
+  "limitations": [
+    "host keeps full feature maps and interleaves transpose phases",
+    "no board transport, DDR DMA or autonomous FPGA layer scheduler",
+    "no full-frame RTL simulation or on-board inference validation"
+  ],
+  "rtl_sha256": {
+    "rtl/cyclegan_bus_top.sv": "4f5bd6ba405af202f8e91905cd10ef472a42cade8b05424db5582b856966d201",
+    "rtl/mn_cache.sv": "395af25c61bcb1a23c005ce69d71cf23f772defdd09d6f6919200de6e1c3ce17",
+    "rtl/mn_dw_buffer.sv": "9590ecc43a1ba30150678854f4d32daf747314ba92a8fc711931b840fbe4bbca",
+    "rtl/mn_input_mux.sv": "00d017fb5fca1a319afa410af1a9e4a449fa4ed018a20e1f357e259810e9a13b",
+    "rtl/mn_instruction_fifo.sv": "40b7810b326af113384f45def9e63d65409256f616a1527cdfa87cef1ff58992",
+    "rtl/mn_model_rom.sv": "6fa4f14da9d46980ad3d23d5084769368abead0f279d007afa141ebba216019e",
+    "rtl/mn_param_ram.sv": "d372d31db182b38b5b8c3a29ec6b0879f3e7b8057e96465089b4e05c22c4b742",
+    "rtl/mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+    "rtl/mn_postprocess.sv": "7b3e4087a3623d5e777fea3a836cac9a5d0227b61ca8b7a2bce5d9dc2ca9a0af",
+    "rtl/mn_tanh.sv": "b831530ce2a8687640b6f9f5ede2efddb94bb4a84814ab2e80967c601076c3f1",
+    "rtl/mobilenet_bus_top.sv": "98bb881bb50aec92aaae46cadb7aec4210fc60e3176a697cc5fb0f8361c19ac4",
+    "rtl/mobilenet_unit.sv": "4ec857733e343267e98e2ad0939f14a9665dd4d68f3c963c1df059005550ee29",
+    "rtl/mn_isa.vh": "a10e107fc2ecaed335599d7abbf9996f4e00f8eba809b0e94a453d9bb4af9843",
+    "rtl/mn_model_params_init.vh": "a5ed47a992edde66a0a482a74b67b3f9e7b36159df70a628ceaea2d01e3c16fc",
+    "rtl/mn_tanh_u8.mem": "7584e60281f74b0d8744f56b3e1c902bc22ace91150b64791d49bd2c248a4478"
+  },
+  "report_sha256": {
+    "mobilenet.map.rpt": "a9212912052938518c64341aff94ebe149f226c48e64a44a9db75976c12f8cf9",
+    "mobilenet.timing.rpt": "05926923da65669c627594e5f014311f8dced1e7d4970e29aa9000669aa19fa9",
+    "mobilenet.place.rpt": "7ae17e116011aa76543cab654a6c2864733cbc88fddffd56b0861c2137e6ed5d"
+  }
+}

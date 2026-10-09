@@ -4,6 +4,11 @@ $projectRoot=Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
 try {
     New-Item -ItemType Directory -Force build/sim | Out-Null
+    # Some tests print only at completion. Do not expose a previous PASS
+    # while the current simulation is still running.
+    foreach($log in @('assets','model_bus','model_postmap','fifo_mapped')) {
+        Set-Content -LiteralPath "build/sim/$log.log" -Value '' -NoNewline
+    }
     & $Python sim/generate_model_smoke.py
     if($LASTEXITCODE -ne 0) { throw 'Model vectors failed' }
     & $Python sim/check_host_protocol.py
@@ -15,9 +20,9 @@ try {
     & $Python sim/prepare_models.py
     if($LASTEXITCODE -ne 0) { throw 'Simulation model preparation failed' }
     $rtlSources=@('rtl/mn_cache.sv','rtl/mn_param_ram.sv','rtl/mn_instruction_fifo.sv',
-        'rtl/mn_dw_buffer.sv','rtl/mn_pe_array.sv','rtl/mn_postprocess.sv','rtl/mn_model_rom.sv',
+        'rtl/mn_dw_buffer.sv','rtl/mn_input_mux.sv','rtl/mn_pe_array.sv','rtl/mn_postprocess.sv','rtl/mn_model_rom.sv',
         'rtl/mn_tanh.sv','rtl/mobilenet_unit.sv','rtl/mobilenet_bus_top.sv','rtl/cyclegan_bus_top.sv')
-    & iverilog -g2012 -s tb_cyclegan_bus -I rtl -o build/sim/model_bus.vvp sim/tb_cyclegan_bus.sv @rtlSources conv_mem/conv_mem_unit/efx_ram10.v yilisi_sim_models/efx_dpram10.v build/sim/efx_dsp48_compat.sv
+    & iverilog -g2012 -s tb_cyclegan_bus -I rtl -o build/sim/model_bus.vvp sim/tb_cyclegan_bus.sv @rtlSources conv_mem/conv_mem_unit/efx_ram10.v yilisi_sim_models/efx_dpram10.v build/sim/efx_dsp48_compat.sv build/sim/efx_lut4_compat.sv
     if($LASTEXITCODE -ne 0) { throw 'Model bus compilation failed' }
     & vvp build/sim/model_bus.vvp | Tee-Object -FilePath build/sim/model_bus.log
     if($LASTEXITCODE -ne 0) { throw 'Model bus simulation failed' }

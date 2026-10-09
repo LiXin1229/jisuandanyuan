@@ -213,12 +213,9 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
         .pad_en(state==PAD_X || state==PAD_Y),.pad_axis(pad_axis),.pad_zero(pad_zero),.pad_dst(pad_dst),.pad_src(pad_mapped[3:0]),
         .rotate_en((d1_valid && d1_source==SRC_WINDOW && !d1_last) || state==ALIGN_X || state==ALIGN_Y),
         .rotate_dir(state==ALIGN_X ? 2'd0 : state==ALIGN_Y ? 2'd2 : d1_direction),.pixels(window_pixels));
+    mn_input_mux input_mux(.source(d1_source),.window_pixels(window_pixels),
+        .cache_data(cache_data),.pixels(input_tile));
     genvar p;
-    generate for(p=0;p<100;p=p+1) begin: input_pixels
-        localparam R=p/10,C=p%10,PACK=((R/5)*2+C/5)*25+(R%5)*5+C%5;
-        assign input_tile[p*8+:8]=d1_source==SRC_WINDOW ? window_pixels[p*8+:8] :
-            d1_source==SRC_CACHE ? cache_data[PACK*8+:8] : d1_source==SRC_BIAS ? 8'd16 : 8'd1;
-    end endgenerate
     wire signed [17:0] pe_weight=d1_add ? 18'sd256 : d1_const ? 18'sd128 :
         $signed({{2{param_data[15]}},param_data})+(d1_bias && rounding ? 18'sd8 : 18'sd0);
     wire [3199:0] pe_data;
