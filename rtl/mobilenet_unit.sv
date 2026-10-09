@@ -135,7 +135,9 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
     wire buffer_ready=(state==LOAD_DRAIN && window_load_done && final_load_queued && !need_x && !need_y) ||
         (state==PAD_X && window_pad_done && pad_last && !need_y) ||
         (state==PAD_Y && window_pad_done && pad_last);
-    wire dw_start=state==INIT_WAIT && window_init_done;
+    // The live window was filled alongside backing-store writes. Issue tap0
+    // on the completion edge; its PE acceptance is one clock later.
+    wire dw_start=buffer_ready;
     reg [2:0] tap_row,tap_col;
     wire row_end=tap_row[0] ? tap_col==0 : tap_col==kw-1'b1;
     wire tap_last=tap_row==kh-1'b1 && row_end;
@@ -214,7 +216,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0) (
         end
     end
     wire [799:0] window_pixels,input_tile;
-    mn_dw_buffer_bram windows(.clk(clk),.reset(reset),.load_en(d1_load),.load_zero(d1_zero),.load_owner(d1_owner),.tile(cache_data),
+    mn_dw_buffer_bram #(.OVERLAP_INIT(1)) windows(.clk(clk),.reset(reset),.load_en(d1_load),.load_zero(d1_zero),.load_owner(d1_owner),.tile(cache_data),
         .load_done(window_load_done),.load_last(window_load_last),.pad_en(window_pad_request),.pad_axis(pad_axis),.pad_zero(pad_zero),
         .pad_dst(pad_dst),.pad_src(pad_mapped[3:0]),.pad_done(window_pad_done),
         .init_start(buffer_ready),.init_x({1'b0,origin}),.init_y({1'b0,origin}),.init_done(window_init_done),

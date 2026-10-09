@@ -2,9 +2,10 @@
 
 目标器件 Ti60 F225，Efinity 2026.1；100 路 DSP、10×10 tile、signed8 Q4.4 数据和 signed16 Q8.8 参数。
 
-当前版本支持 `netG_B_epoch11.pth` 的 7×7 输出生成器，采用 checkpoint 的固定 BN 统计生成 affine 参数。整网调度在主机端运行，编码、残差、四相转置卷积和 Tanh 复用同一计算单元。核心及全部缓存/模型参数/Tanh 综合为 **195 BRAM、14683 LUT4、4035 FF、100 DSP**（当前 BRAM 预算约 200）；**150 MHz** 内部时序通过布局布线检查，setup / hold 余量 **0.539 / 0.026 ns**。本轮保持全部执行拍数：PW 无舍入为 `Cin+8` 拍；3×3 / 7×7 DW 分别连续发射 9 / 49 次 MAC，无填充执行时间为 **77 / 117 拍**，150 MHz 下分别约 **513 / 780 ns**。需要修补的边每个增加 9 拍，排队弹出间隔在执行时间基础上加 1 拍。
+当前版本支持 `netG_B_epoch11.pth` 的 7×7 输出生成器，采用 checkpoint 的固定 BN 统计生成 affine 参数。整网调度在主机端运行，编码、残差、四相转置卷积和 Tanh 复用同一计算单元。核心及全部缓存/模型参数/Tanh 综合为 **195 BRAM、15807 LUT4、4026 FF、100 DSP**（当前 BRAM 预算约 200）；**150 MHz** 内部时序通过布局布线检查，setup / hold 余量 **0.725 / 0.026 ns**。本轮采用 BRAM 与工作窗口同步初始化的折中方案，仅增加 **1124 LUT**：3×3 / 7×7 DW 仍连续发射 9 / 49 次 MAC，无填充执行时间从 77 / 117 降到 **52 / 92 拍**，150 MHz 下约 **347 / 613 ns**。PW 无舍入仍为 `Cin+8` 拍；需要修补的边每个增加 9 拍，排队弹出间隔在执行时间基础上加 1 拍。
 
-- [当前 150 MHz 时序与参数 ROM 优化](docs/timing_optimization_iteration9.md)
+- [当前 BRAM 与工作窗口同步初始化的折中优化](docs/window_latency_iteration10.md)
+- [第九轮 150 MHz 时序与参数 ROM 优化](docs/timing_optimization_iteration9.md)
 - [第八轮八 bank BRAM 与 100 像素工作窗口](docs/window_bram_iteration8.md)
 - [第七轮约 200 BRAM 预算下的统一 cache 优化](docs/bram_optimization_iteration7.md)
 - [第六轮缓冲 CE 解耦、数据共享与 compact 优化](docs/buffer_optimization_iteration6.md)
@@ -21,7 +22,7 @@
 - 可写参数顶层：`rtl/mobilenet_bus_top.sv`
 - 主机调度与总线驱动：`tools/cyclegan_host.py`
 
-所有空间核及部分 tile 共用 **8 个 TDP BRAM 中的 256 byte 静态数据＋100 byte 寄存器工作窗口**。按 `(r+c) mod 8` 分 bank，一拍可以读出完整一行或一列，再截取十个边界像素补入工作窗口。窗口从 9913 降至 4649 LUT；不使用 cache scratch。三个逻辑 cache 统一映射到 160 个 2048×5 TDP BRAM，模型参数 25，Tanh 2，合计 195。host/core 使用独立写端口，非法读用 BRAM 输出同步复位返回零。cache 逻辑容量仍为 1536×800 bit，支持 20 bit 主机切片写掩码，可逐行写入并按 tile 读取。ISA 的原有 feature 地址上限保持兼容。
+所有空间核及部分 tile 共用 **8 个 TDP BRAM 中的 256 byte 静态数据＋100 byte 寄存器工作窗口**。按 `(r+c) mod 8` 分 bank，一拍可以读出完整一行或一列，再截取十个边界像素补入工作窗口。左右 halo 按列加载，九个 tile 合计 34 次行/列写入；同一写入同时更新工作窗口，省去额外十行初始化读取。窗口为 5760 LUT，比上一版 4649 增加 1111；不使用 cache scratch。三个逻辑 cache 统一映射到 160 个 2048×5 TDP BRAM，模型参数 25，Tanh 2，合计 195。host/core 使用独立写端口，非法读用 BRAM 输出同步复位返回零。cache 逻辑容量仍为 1536×800 bit，支持 20 bit 主机切片写掩码，可逐行写入并按 tile 读取。ISA 的原有 feature 地址上限保持兼容。
 
 ## 复现
 

@@ -29,8 +29,8 @@ def main():
     cli.add_argument('--unit-log', default='build/sim/unit.log')
     cli.add_argument('--bus-log', default='build/sim/bus.log')
     cli.add_argument('--metrics', type=Path, default=ROOT/'build/sim/commands.csv')
-    cli.add_argument('--output', type=Path, default=ROOT/'docs/analysis/cyclegan_iteration9_results.json')
-    cli.add_argument('--baseline', default='857e566')
+    cli.add_argument('--output', type=Path, default=ROOT/'docs/analysis/cyclegan_iteration10_results.json')
+    cli.add_argument('--baseline', default='1561ed4')
     cli.add_argument('--timing-trial-directory', type=Path, action='append', default=[])
     cli.add_argument('--bram-budget', type=int, default=200)
     args = cli.parse_args()
@@ -101,6 +101,10 @@ def main():
     tests['shared_dw_buffer'] = passed('build/sim/dw_buffer.log', r'PASS shared DW buffer:[^\r\n]+')
     tests['shared_dw_buffer']['scope'] = 'Unchanged legacy register-buffer reference; production uses the BRAM buffer below.'
     tests['bram_dw_buffer'] = passed('build/sim/dw_buffer_bram.log', r'PASS BRAM DW buffer:[^\r\n]+')
+    tests['overlap_dw_buffer'] = passed('build/sim/dw_buffer_overlap.log', r'PASS overlap DW buffer:[^\r\n]+')
+    tests['overlap_dw_buffer']['scope'] = 'Production OVERLAP_INIT=1, checked before init_start and with simultaneous initial prefetch.'
+    tests['overlap_dw_buffer']['testbench_sha256'] = sha(ROOT/'sim/tb_dw_buffer_overlap.sv')
+    tests['overlap_dw_buffer']['compiled_simulator_sha256'] = sha(ROOT/'build/sim/dw_buffer_overlap.vvp')
     tests['pe_input_mux'] = passed('build/sim/input_mux.log', r'PASS PE input mux:[^\r\n]+')
     tests['compact'] = passed('build/sim/compact.log', r'PASS compact:[^\r\n]+')
     tests['model_assets_rtl']['testbench_sha256'] = sha(ROOT/'sim/tb_model_assets.sv')
@@ -128,14 +132,15 @@ def main():
     macs = [[int(x), int(y)] for x,y in re.findall(r'TIMING_MAC cycle=(\d+) tap=(\d+)', trace)]
     assert len(pops) == len(dones) == 6
     execution = [b-a for a,b in zip(pops,dones)]
-    assert execution == [77,117,9,9,9,9]
+    assert execution == [52,92,9,9,9,9]
     assert len(macs) == 58
-    for i,width,start,length in ((0,3,63,9),(1,7,63,49)):
+    for i,width,start,length in ((0,3,38,9),(1,7,38,49)):
         group = macs[:9] if i == 0 else macs[9:]
         expected = [r*width+c for r in range(width)
                     for c in (range(width) if r%2 == 0 else range(width-1,-1,-1))]
         assert [x[0] for x in group] == list(range(pops[i]+start,pops[i]+start+length))
         assert [x[1] for x in group] == expected
+        assert dones[i]-group[-1][0] == 6
     assert all(pops[i] == dones[i-1]+1 for i in range(3,6))
     executor_timing = {'dw3_pop': pops[0], 'dw3_mac_cycle_and_tap': macs[:9],
                        'dw3_done': dones[0], 'dw7_pop': pops[1],
@@ -169,6 +174,8 @@ def main():
               'bram_budget': args.bram_budget,
               'cache_native_planes': {'count': 160, 'parameters': cache_parameters},
               'window_native_banks': {'count': 8, 'parameters': window_parameters},
+              'window_loading': {'backing_store_line_writes': 34, 'overlap_live_initialization': True,
+                                 'live_data_bytes': 100, 'backing_store_bytes': 256},
               'pe_source_selection_lut4': len(input_masks),
               'signed32_compact_lut4': len(compact_masks),
               'internal_timing': timing,
