@@ -1,0 +1,344 @@
+{
+  "recorded_utc": "2026-10-09T18:18:33.348691+00:00",
+  "network_commit": "ac1fbbc",
+  "contract": "FPGA equals the current Q4.4/Q8.8 fixed-normalization integer generator; independent scatter and encoded-instruction references",
+  "input": {
+    "image": "C:\\Users\\Administrator\\Desktop\\jisuan\\pe10_10\\test.jpg",
+    "image_sha256": "b6c4b5ebdb8185d0c7aec20423ba19eb7b736fa1fe788bcd4ff8b9688cf911bf",
+    "input_rgb_sha256": "ee4386fff6edec6f0cd6f68e6dda34c36aa6a333e3a4f498475fc417391a71a3",
+    "input_frame_sha256": "717c5b318a713c171c0970614c84d079c4741f69111359dfb99a2155eb862460",
+    "input_checksum": 846017256,
+    "shape": [
+      240,
+      320,
+      3
+    ],
+    "resize": false,
+    "checkpoint_sha256": "7d6aaac3a6192dddde81602e6120d1aa4dc732690efb8c908cb4757e12dc9a8b",
+    "parameter_sha256": "79407aebe93df24bc295d15264645d66a8a7aaeaf0874f0a22e57db8034ba3bf",
+    "bitstream_sha256": "acb3b555ecb4eca8a96a957a9e116e0773f8b7037a3d07a5c2709e5451013ab1",
+    "sources": {
+      "clock_hz": 150000000,
+      "rtl_sha256": {
+        "mn_cache.sv": "40496814e679119db3548cf9ceb85c39cbf57e51a63644b58c15e1a78b5fda48",
+        "mn_param_ram.sv": "d372d31db182b38b5b8c3a29ec6b0879f3e7b8057e96465089b4e05c22c4b742",
+        "mn_instruction_fifo.sv": "40b7810b326af113384f45def9e63d65409256f616a1527cdfa87cef1ff58992",
+        "mn_dw_buffer_bram.sv": "c11cce6670afdbbb4425b4a6fa4d5426e401e0c4a9cd035db25ed809aa87b6d0",
+        "mn_input_mux.sv": "00d017fb5fca1a319afa410af1a9e4a449fa4ed018a20e1f357e259810e9a13b",
+        "mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+        "mn_compact.sv": "88c64acd9beeb34b4fc847c13cc1a16b312f9ba567d1911c5fcbacbb7b3b76b0",
+        "mn_postprocess.sv": "7df8637fa2e6b9306684b3cf308831e9ced85cf81394a39738c682cc307f66b9",
+        "mn_model_rom.sv": "5097fd825901d906370ead85ab02f09d38460679c26e44167a0ae6f37234fc99",
+        "mn_encoder_rom.sv": "fad646dee70d81e563539990859e9e38694ad7d18504465879489da437a42eb3",
+        "mn_tanh.sv": "c0d92dc594e613ef65155b82209cc3bd67c613d29729258a942093833c3c339b",
+        "mobilenet_unit.sv": "86964dfb501f9c0db3a83a8dd529ef36f7da0ec4353f1442fa3a3d5ed9fd361d",
+        "cyclegan_rgb_loader.sv": "07c1b302ff18ff935adc7e80a0d725e81caaface9fbeb42f93f0dd9fa0fd913a",
+        "cyclegan_encoder.sv": "8b94a37c650625f407db4a80d410e11deca01479d0eb52cf6e0655310f023556",
+        "cyclegan_ddr_read_bridge.sv": "98da68659f9a412bbb73a451e43a2e4f8d99ae6c4dbfab45b4ff6b16ec6efa5d",
+        "mn_residual_rom.sv": "421e897fd00dbe2c8f3c2845a0f83e3f5fd83e5792b13127eddabb2af9d29180",
+        "cyclegan_residual_scheduler.sv": "57b2094dab8ac05722213a07fc7b3f6a61e0530a74bbdd186d489598ebf5aeb4",
+        "mn_decoder_rom.sv": "4c77d2984cf02dd754d68bb01219143a533b6b0e6495f91455e09af5d63df639",
+        "cyclegan_decoder_scheduler.sv": "d6ef3b804f49e42c61a05baee45869b31249fbda8b8f3264b04466c1bed43398",
+        "cyclegan_feature_writer.sv": "3b956c823ed67a0a861fa8f5fa4b19969db00169fbfef755975b8e638a8ca12e",
+        "cyclegan_write_arbiter.sv": "9f9c3ead6b30929a71804c754e372b614988b5a1e836491589186c14bd4f48ce",
+        "mn_generator_rom.sv": "36c28c5a896f38414a58cdbf797590088329edf827fe7a201772d5492e2524ee"
+      }
+    },
+    "instruction_layers_checked": 16,
+    "instruction_counts": {
+      "row_writes": 197400,
+      "DW": 8064,
+      "PW": 14208,
+      "NORM": 28416,
+      "tile_reads": 24960,
+      "tile_writes": 111328,
+      "ADD": 3456,
+      "CONV": 116736
+    },
+    "reference_sha256": "8c06645d893fcce5e87457c17b84547d9ba6c05632a184db097b01a6b4c5bcea"
+  },
+  "board_runs": [
+    {
+      "timestamp_utc": "2026-10-09T18:17:22.651905+00:00",
+      "frames": [
+        {
+          "cycles": 6991621,
+          "busy_cycles": 6375696,
+          "first_output": 341572,
+          "frames": 1,
+          "chunks": 4799,
+          "frame_id": 0,
+          "calibration": 15123,
+          "command_wait_cycles": 0,
+          "data_wait_cycles": 405444,
+          "input_checksum": 846017256,
+          "blocks_completed": 9,
+          "output_base": 0,
+          "encoder_cycles": 856466,
+          "residual_cycles": 442395,
+          "block_cycles": 49155,
+          "layers_completed": 3,
+          "decoder_cycles": 3786172,
+          "layer_cycles": 1906571,
+          "output_cycles": 1906571,
+          "output_completed": true,
+          "phy_phase": 6,
+          "status": 3809853440,
+          "paused": false,
+          "blocks": [
+            {
+              "block": 1,
+              "cycles": 49155,
+              "values": 38400,
+              "mismatches": 0,
+              "expected_sha256": "3d0da1f60a9d6e4d73dc903c2f4069615dc3fde941f1741246b8bf275dfa8cfe",
+              "actual_sha256": "3d0da1f60a9d6e4d73dc903c2f4069615dc3fde941f1741246b8bf275dfa8cfe"
+            },
+            {
+              "block": 2,
+              "cycles": 49155,
+              "values": 38400,
+              "mismatches": 0,
+              "expected_sha256": "674941bd1118ee415756c37efa72c73c67a7570aeb0b8e4d0baad7a0fcac83d2",
+              "actual_sha256": "674941bd1118ee415756c37efa72c73c67a7570aeb0b8e4d0baad7a0fcac83d2"
+            },
+            {
+              "block": 3,
+              "cycles": 49155,
+              "values": 38400,
+              "mismatches": 0,
+              "expected_sha256": "9bbbe73f155e4d384d9954f4add6707db0071ed79ef93da902dbc103865a3c0f",
+              "actual_sha256": "9bbbe73f155e4d384d9954f4add6707db0071ed79ef93da902dbc103865a3c0f"
+            },
+            {
+              "block": 4,
+              "cycles": 49155,
+              "values": 38400,
+              "mismatches": 0,
+              "expected_sha256": "e3235ca0ac91c873bda6c5d278e6e2add36f34f27f9a8f8b0102dc895a5a6961",
+              "actual_sha256": "e3235ca0ac91c873bda6c5d278e6e2add36f34f27f9a8f8b0102dc895a5a6961"
+            },
+            {
+              "block": 5,
+              "cycles": 49155,
+              "values": 38400,
+              "mismatches": 0,
+              "expected_sha256": "f6f4b11b587d345b5006e76398af22faca9294acd0013a6c0d233460c79e1128",
+              "actual_sha256": "f6f4b11b587d345b5006e76398af22faca9294acd0013a6c0d233460c79e1128"
+            },
+            {
+              "block": 6,
+              "cycles": 49155,
+              "values": 38400,
+              "mismatches": 0,
+              "expected_sha256": "1523362a06511d9db0d97c2833ca8f8b931581da4e9d676ca510e6eede109f77",
+              "actual_sha256": "1523362a06511d9db0d97c2833ca8f8b931581da4e9d676ca510e6eede109f77"
+            },
+            {
+              "block": 7,
+              "cycles": 49155,
+              "values": 38400,
+              "mismatches": 0,
+              "expected_sha256": "ae5843cabff571a9607757bdd0587aea4361589e82114d6fa54956c8527cfe30",
+              "actual_sha256": "ae5843cabff571a9607757bdd0587aea4361589e82114d6fa54956c8527cfe30"
+            },
+            {
+              "block": 8,
+              "cycles": 49155,
+              "values": 38400,
+              "mismatches": 0,
+              "expected_sha256": "c92dd3b0e83542b0490bb0f7c14d10741181a38a24139306b370e4d5f1550093",
+              "actual_sha256": "c92dd3b0e83542b0490bb0f7c14d10741181a38a24139306b370e4d5f1550093"
+            },
+            {
+              "block": 9,
+              "cycles": 49155,
+              "values": 38400,
+              "mismatches": 0,
+              "expected_sha256": "29fd00258a4336c15b4296749ec58b410f1f5d65955937667543a57776e9e1d9",
+              "actual_sha256": "29fd00258a4336c15b4296749ec58b410f1f5d65955937667543a57776e9e1d9"
+            }
+          ],
+          "layers": [
+            {
+              "layer": 1,
+              "cycles": 910642,
+              "decoder_cycles": 910642,
+              "values": 76800,
+              "mismatches": 0,
+              "expected_sha256": "8b4f6605151a5f7c73a347abbac4a2c6fb83a9fca9d607d6c6240e9dc9638094",
+              "actual_sha256": "8b4f6605151a5f7c73a347abbac4a2c6fb83a9fca9d607d6c6240e9dc9638094"
+            },
+            {
+              "layer": 2,
+              "cycles": 952484,
+              "decoder_cycles": 1863126,
+              "values": 153600,
+              "mismatches": 0,
+              "expected_sha256": "55f7521b9ce6d2c8046e4ca68db338d772a99b002fca324cc7012173f0fa2875",
+              "actual_sha256": "55f7521b9ce6d2c8046e4ca68db338d772a99b002fca324cc7012173f0fa2875"
+            },
+            {
+              "layer": 3,
+              "cycles": 1923046,
+              "decoder_cycles": 3786172,
+              "values": 614400,
+              "mismatches": 0,
+              "expected_sha256": "c95b6db54f0c4c22e54dd817dfb72aba2d730efbd249f53dc5206ef2c6b31bd9",
+              "actual_sha256": "c95b6db54f0c4c22e54dd817dfb72aba2d730efbd249f53dc5206ef2c6b31bd9"
+            },
+            {
+              "layer": 4,
+              "cycles": 1906571,
+              "decoder_cycles": 3786172,
+              "values": 230400,
+              "mismatches": 0,
+              "expected_sha256": "8c06645d893fcce5e87457c17b84547d9ba6c05632a184db097b01a6b4c5bcea",
+              "actual_sha256": "8c06645d893fcce5e87457c17b84547d9ba6c05632a184db097b01a6b4c5bcea"
+            }
+          ],
+          "mode": "layer_readback",
+          "input_variant": "normal",
+          "expected_input_checksum": 846017256,
+          "ddr_verified": true,
+          "values": 1420800,
+          "mismatches": 0,
+          "compute_ms": 46.61080666666667,
+          "decoder_ms": 25.241146666666666,
+          "output_ms": 12.710473333333333
+        }
+      ],
+      "failure": null,
+      "jtag_url": "ftdi://0x0403:0x6014:3:7/1",
+      "host_seconds": 259.344000000041,
+      "clock_hz": 150000000,
+      "bitstream_sha256": "acb3b555ecb4eca8a96a957a9e116e0773f8b7037a3d07a5c2709e5451013ab1",
+      "sources": {
+        "clock_hz": 150000000,
+        "rtl_sha256": {
+          "mn_cache.sv": "40496814e679119db3548cf9ceb85c39cbf57e51a63644b58c15e1a78b5fda48",
+          "mn_param_ram.sv": "d372d31db182b38b5b8c3a29ec6b0879f3e7b8057e96465089b4e05c22c4b742",
+          "mn_instruction_fifo.sv": "40b7810b326af113384f45def9e63d65409256f616a1527cdfa87cef1ff58992",
+          "mn_dw_buffer_bram.sv": "c11cce6670afdbbb4425b4a6fa4d5426e401e0c4a9cd035db25ed809aa87b6d0",
+          "mn_input_mux.sv": "00d017fb5fca1a319afa410af1a9e4a449fa4ed018a20e1f357e259810e9a13b",
+          "mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+          "mn_compact.sv": "88c64acd9beeb34b4fc847c13cc1a16b312f9ba567d1911c5fcbacbb7b3b76b0",
+          "mn_postprocess.sv": "7df8637fa2e6b9306684b3cf308831e9ced85cf81394a39738c682cc307f66b9",
+          "mn_model_rom.sv": "5097fd825901d906370ead85ab02f09d38460679c26e44167a0ae6f37234fc99",
+          "mn_encoder_rom.sv": "fad646dee70d81e563539990859e9e38694ad7d18504465879489da437a42eb3",
+          "mn_tanh.sv": "c0d92dc594e613ef65155b82209cc3bd67c613d29729258a942093833c3c339b",
+          "mobilenet_unit.sv": "86964dfb501f9c0db3a83a8dd529ef36f7da0ec4353f1442fa3a3d5ed9fd361d",
+          "cyclegan_rgb_loader.sv": "07c1b302ff18ff935adc7e80a0d725e81caaface9fbeb42f93f0dd9fa0fd913a",
+          "cyclegan_encoder.sv": "8b94a37c650625f407db4a80d410e11deca01479d0eb52cf6e0655310f023556",
+          "cyclegan_ddr_read_bridge.sv": "98da68659f9a412bbb73a451e43a2e4f8d99ae6c4dbfab45b4ff6b16ec6efa5d",
+          "mn_residual_rom.sv": "421e897fd00dbe2c8f3c2845a0f83e3f5fd83e5792b13127eddabb2af9d29180",
+          "cyclegan_residual_scheduler.sv": "57b2094dab8ac05722213a07fc7b3f6a61e0530a74bbdd186d489598ebf5aeb4",
+          "mn_decoder_rom.sv": "4c77d2984cf02dd754d68bb01219143a533b6b0e6495f91455e09af5d63df639",
+          "cyclegan_decoder_scheduler.sv": "d6ef3b804f49e42c61a05baee45869b31249fbda8b8f3264b04466c1bed43398",
+          "cyclegan_feature_writer.sv": "3b956c823ed67a0a861fa8f5fa4b19969db00169fbfef755975b8e638a8ca12e",
+          "cyclegan_write_arbiter.sv": "9f9c3ead6b30929a71804c754e372b614988b5a1e836491589186c14bd4f48ce",
+          "mn_generator_rom.sv": "36c28c5a896f38414a58cdbf797590088329edf827fe7a201772d5492e2524ee"
+        }
+      }
+    },
+    {
+      "timestamp_utc": "2026-10-09T18:18:33.033774+00:00",
+      "frames": [
+        {
+          "cycles": 6991866,
+          "busy_cycles": 6375696,
+          "first_output": 341777,
+          "frames": 2,
+          "chunks": 4799,
+          "frame_id": 1,
+          "calibration": 15123,
+          "command_wait_cycles": 0,
+          "data_wait_cycles": 405826,
+          "input_checksum": 846017256,
+          "blocks_completed": 9,
+          "output_base": 0,
+          "encoder_cycles": 856708,
+          "residual_cycles": 442395,
+          "block_cycles": 49155,
+          "layers_completed": 3,
+          "decoder_cycles": 3786103,
+          "layer_cycles": 1906643,
+          "output_cycles": 1906643,
+          "output_completed": true,
+          "phy_phase": 6,
+          "status": 3809853696,
+          "paused": false,
+          "blocks": [],
+          "layers": [
+            {
+              "layer": 4,
+              "cycles": 1906643,
+              "decoder_cycles": 3786103,
+              "values": 230400,
+              "mismatches": 0,
+              "expected_sha256": "8c06645d893fcce5e87457c17b84547d9ba6c05632a184db097b01a6b4c5bcea",
+              "actual_sha256": "8c06645d893fcce5e87457c17b84547d9ba6c05632a184db097b01a6b4c5bcea"
+            }
+          ],
+          "mode": "continuous",
+          "input_variant": "normal",
+          "expected_input_checksum": 846017256,
+          "ddr_verified": false,
+          "values": 230400,
+          "mismatches": 0,
+          "compute_ms": 46.61244,
+          "decoder_ms": 25.240686666666665,
+          "output_ms": 12.710953333333334
+        }
+      ],
+      "failure": null,
+      "jtag_url": "ftdi://0x0403:0x6014:3:7/1",
+      "host_seconds": 68.8430000001099,
+      "clock_hz": 150000000,
+      "bitstream_sha256": "acb3b555ecb4eca8a96a957a9e116e0773f8b7037a3d07a5c2709e5451013ab1",
+      "sources": {
+        "clock_hz": 150000000,
+        "rtl_sha256": {
+          "mn_cache.sv": "40496814e679119db3548cf9ceb85c39cbf57e51a63644b58c15e1a78b5fda48",
+          "mn_param_ram.sv": "d372d31db182b38b5b8c3a29ec6b0879f3e7b8057e96465089b4e05c22c4b742",
+          "mn_instruction_fifo.sv": "40b7810b326af113384f45def9e63d65409256f616a1527cdfa87cef1ff58992",
+          "mn_dw_buffer_bram.sv": "c11cce6670afdbbb4425b4a6fa4d5426e401e0c4a9cd035db25ed809aa87b6d0",
+          "mn_input_mux.sv": "00d017fb5fca1a319afa410af1a9e4a449fa4ed018a20e1f357e259810e9a13b",
+          "mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+          "mn_compact.sv": "88c64acd9beeb34b4fc847c13cc1a16b312f9ba567d1911c5fcbacbb7b3b76b0",
+          "mn_postprocess.sv": "7df8637fa2e6b9306684b3cf308831e9ced85cf81394a39738c682cc307f66b9",
+          "mn_model_rom.sv": "5097fd825901d906370ead85ab02f09d38460679c26e44167a0ae6f37234fc99",
+          "mn_encoder_rom.sv": "fad646dee70d81e563539990859e9e38694ad7d18504465879489da437a42eb3",
+          "mn_tanh.sv": "c0d92dc594e613ef65155b82209cc3bd67c613d29729258a942093833c3c339b",
+          "mobilenet_unit.sv": "86964dfb501f9c0db3a83a8dd529ef36f7da0ec4353f1442fa3a3d5ed9fd361d",
+          "cyclegan_rgb_loader.sv": "07c1b302ff18ff935adc7e80a0d725e81caaface9fbeb42f93f0dd9fa0fd913a",
+          "cyclegan_encoder.sv": "8b94a37c650625f407db4a80d410e11deca01479d0eb52cf6e0655310f023556",
+          "cyclegan_ddr_read_bridge.sv": "98da68659f9a412bbb73a451e43a2e4f8d99ae6c4dbfab45b4ff6b16ec6efa5d",
+          "mn_residual_rom.sv": "421e897fd00dbe2c8f3c2845a0f83e3f5fd83e5792b13127eddabb2af9d29180",
+          "cyclegan_residual_scheduler.sv": "57b2094dab8ac05722213a07fc7b3f6a61e0530a74bbdd186d489598ebf5aeb4",
+          "mn_decoder_rom.sv": "4c77d2984cf02dd754d68bb01219143a533b6b0e6495f91455e09af5d63df639",
+          "cyclegan_decoder_scheduler.sv": "d6ef3b804f49e42c61a05baee45869b31249fbda8b8f3264b04466c1bed43398",
+          "cyclegan_feature_writer.sv": "3b956c823ed67a0a861fa8f5fa4b19969db00169fbfef755975b8e638a8ca12e",
+          "cyclegan_write_arbiter.sv": "9f9c3ead6b30929a71804c754e372b614988b5a1e836491589186c14bd4f48ce",
+          "mn_generator_rom.sv": "36c28c5a896f38414a58cdbf797590088329edf827fe7a201772d5492e2524ee"
+        }
+      }
+    }
+  ],
+  "verified_values": 1651200,
+  "final_rgb_values": 460800,
+  "final_rgb_mismatches": 0,
+  "final_rgb_max_absolute_error": 0,
+  "final_rgb_mean_absolute_error": 0,
+  "artifacts": {
+    "input.png": "build\\test_jpg_verification\\input.png",
+    "instruction_reference.png": "build\\test_jpg_verification\\instruction_reference.png",
+    "paused/board_output.png": "build\\test_jpg_verification\\paused\\board_output.png",
+    "continuous/board_output.png": "build\\test_jpg_verification\\continuous\\board_output.png"
+  },
+  "tool_sha256": {
+    "tools/verify_test_image.py": "f148944d42d4636b225661683a01549134423787978bd58dadabdd0598c21697",
+    "tools/debug_output_deployment.py": "5ab3a5010feafe6385a9efb950522dc7e4c4380d7bd63c57067afb4a11f18bd6",
+    "scripts/run_test_image_board.ps1": "ddaf710a0aa2d9736f392442435c68b3ece2573afbfb79c3650d0add852a0a87"
+  }
+}

@@ -32,6 +32,7 @@ class Board(BaseBoard):
 def main():
  ap=argparse.ArgumentParser();ap.add_argument('--project',type=Path);ap.add_argument('--url',required=True)
  ap.add_argument('--out',type=Path,default=ROOT/'build/stage4_verified');ap.add_argument('--frames',type=int,default=2)
+ ap.add_argument('--reference',type=Path,help='Use this vector directory for every frame instead of the default normal/inverted references')
  ap.add_argument('--frequency',type=float,default=3e6);ap.add_argument('--continuous',action='store_true');ap.add_argument('--verify-ddr',action='store_true')
  args=ap.parse_args();project=args.project or Path((args.out/'staging_path.txt').read_text().strip())
  os.environ.setdefault('EFINITY_USER_DIR',str(project/'vendor_user'));args.out.mkdir(parents=True,exist_ok=True)
@@ -40,7 +41,7 @@ def main():
   board.command(5,8|6);board.wait();state=board.snapshot();first_frame=state['frames']
   if state['status']&0xc000!=0xc000:raise RuntimeError('DDR calibration did not pass')
   for frame in range(args.frames):
-   suffix='_inverted' if frame%2 else '';reference=ROOT/('build/cyclegan_model/vectors'+suffix)
+   suffix='_inverted' if frame%2 else '';reference=args.reference or ROOT/('build/cyclegan_model/vectors'+suffix)
    raw=(reference/'frame_rgbx.bin').read_bytes();board.command(1);board.wait()
    stream=bytes(((raw[((ty*10+row)*320+tx*10+pixel)*4+channel]-124)>>3)&255
     for ty in range(24) for tx in range(32) for row in range(10) for channel in range(3) for pixel in range(10))
