@@ -1,0 +1,12 @@
+$EFINITY_HOME/sim_models/verilog/efx_ram10.v
+$EFINITY_HOME/sim_models/verilog/efx_dpram10.v
+$EFINITY_HOME/sim_models/verilog/efx_ram_5k.v
+$EFINITY_HOME/sim_models/verilog/efx_dpram_5k.v
+
+mem_bist_sdp_async.sv
+mem_bist_sp_async.sv
+mem_bist_tdp_async.sv
+
+bram_10kb.v
+bram_ed.sv
+tb.sv

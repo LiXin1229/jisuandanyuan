@@ -1,0 +1,5 @@
+/build/
+/*.vvp
+/sim/vectors.txt
+/sim/cases.json
+__pycache__/
