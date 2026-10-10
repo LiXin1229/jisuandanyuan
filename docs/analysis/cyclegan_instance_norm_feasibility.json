@@ -1,0 +1,104 @@
+{
+  "contract": "Reference integer per-image Q4.4 normalization; population variance; epsilon=1e-5; not float32 bit identity.",
+  "reference_sources": {
+    "live_norm_reference.py": "0ae9470a2e8f198fe03ba8cd0e1a618319b8c4b1252583a2b20094421a0a153e",
+    "export_live_norm.py": "9bfb7834dfd856d722479f885a4623a1c4d3cb37d6d4e618e5d46fad3507a352",
+    "prepare_generator_params.py": "b207fe7d7c1d65254e53a6e28cd47d5ef11891356ad226001097186afdd93656"
+  },
+  "checkpoint_sha256": "7d6aaac3a6192dddde81602e6120d1aa4dc732690efb8c908cb4757e12dc9a8b",
+  "layers": 26,
+  "channels": 688,
+  "samples": 2841600,
+  "tiles": 28416,
+  "positive_gamma_channels": 688,
+  "negative_gamma_channels": 0,
+  "compute_mhz": 171.42857142857142,
+  "statistic_scan_work": [
+    {
+      "lanes": 1,
+      "sample_clocks_per_tile": 100,
+      "total_tile_sampling_cycles": 2841600,
+      "work_ms": 16.576
+    },
+    {
+      "lanes": 4,
+      "sample_clocks_per_tile": 25,
+      "total_tile_sampling_cycles": 710400,
+      "work_ms": 4.144
+    },
+    {
+      "lanes": 8,
+      "sample_clocks_per_tile": 13,
+      "total_tile_sampling_cycles": 369408,
+      "work_ms": 2.15488
+    },
+    {
+      "lanes": 12,
+      "sample_clocks_per_tile": 9,
+      "total_tile_sampling_cycles": 255744,
+      "work_ms": 1.49184
+    },
+    {
+      "lanes": 16,
+      "sample_clocks_per_tile": 7,
+      "total_tile_sampling_cycles": 198912,
+      "work_ms": 1.16032
+    }
+  ],
+  "coefficient_example_budget": {
+    "clocks_per_channel": 300,
+    "channels": 688,
+    "total_cycles": 206400,
+    "work_ms": 1.204,
+    "note": "Planning budget only; not a measured RTL latency; work can overlap later channels."
+  },
+  "cache": {
+    "usable_tile_addresses": 1487,
+    "pixels_per_tile": 100,
+    "usable_bytes": 148700,
+    "resident_residual_three_tensor_bytes": 115200,
+    "resident_first_transpose_input_plus_output_bytes": 115200
+  },
+  "encoder_pool": {
+    "unpooled_pw_norm_bytes": [
+      614400,
+      307200,
+      153600
+    ],
+    "raw_pool_storage_bytes": [
+      153600,
+      76800,
+      38400
+    ],
+    "statistics_must_use_unpooled_values": true,
+    "old_pw_norm_commands": 10752,
+    "pooled_pw_norm_commands": 2688,
+    "saved_norm_commands": 8064,
+    "saved_executor_and_switch_cycles": 88704,
+    "saved_executor_ms": 0.51744,
+    "new_total_norm_commands": 20352
+  },
+  "largest_raw_ddr_tensor": {
+    "payload_bytes": 614400,
+    "padded_tile_bytes": 786432
+  },
+  "full_integer_references": [
+    {
+      "variant": "vectors",
+      "channels_checked": 688,
+      "coefficient_abs_max_a": 4084,
+      "coefficient_abs_max_b": 717,
+      "pool_commutation_checked_values": 153600,
+      "output_rgb_sha256": "f3ea36cb137bb584a916102d4437eaf5a1a5b4b0e55f09c7d922b977f1f59a59"
+    },
+    {
+      "variant": "vectors_inverted",
+      "channels_checked": 688,
+      "coefficient_abs_max_a": 4083,
+      "coefficient_abs_max_b": 710,
+      "pool_commutation_checked_values": 153600,
+      "output_rgb_sha256": "375efe2ce528df6340964c000637cd87ca557d48fc039857aa59bb18b2715fdb"
+    }
+  ],
+  "validation": "Two full software references generated with all 26 live normalization layers; all 1376 channel coefficient pairs checked; first-encoder pool commutation checked on 307200 values. No FPGA implementation or new board validation."
+}
