@@ -384,6 +384,18 @@ for kernel in (3,4):
         for width,height in ((11,12),(12,11)):
             dw_case(kernel,1,1,width,height,pad,rounding=1)
 
+# Forward kernels: all edge masks, plus narrow partial tiles whose reflected
+# right/bottom padding can use a left/top halo. Consecutive cases reuse the
+# actual window RAM and expose stale cells after a reduced neighborhood load.
+for kernel in (0,1,2):
+    for pad in (1,2):
+        for edge in range(16):
+            tx=0 if edge&1 else 1;ty=0 if edge&4 else 1
+            nx=tx+1 if edge&2 else tx+2;ny=ty+1 if edge&8 else ty+2
+            dw_case(kernel,tx,ty,nx*10,ny*10,pad,rounding=edge&1)
+        for width,height in ((1,1),(2,3),(3,2),(11,12),(12,11),(11,11),(12,12)):
+            dw_case(kernel,int(width>10),int(height>10),width,height,pad,rounding=1)
+
 ROOT.joinpath("vectors.txt").write_text("\n".join(lines)+"\n",encoding="ascii")
 ROOT.joinpath("cases.json").write_text(json.dumps(cases,ensure_ascii=False,indent=2)+"\n",encoding="utf8")
 print(f"Generated {len(cases)} deterministic cases, {len(lines)} transactions")

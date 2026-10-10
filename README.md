@@ -2,6 +2,8 @@
 
 目标器件 Ti60 F225，Efinity 2026.1；100 路 DSP、10×10 tile、signed8 Q4.4 数据和 signed16 Q8.8 参数。
 
+当前实时摄像头版本保持 171.43 MHz，通过减少转置卷积的无效邻域装载，将结果模式整网处理帧率从 **23.07 提至 27.56 fps**，原图显示模式从 **23.99 提至 28.78 fps**。完整视频工程为 **26141 LUT4、12988 FF、249 BRAM、103 DSP**，比上一版仅多 15 LUT 和 1 FF。同帧 230400 个 RGB 字节零差异，两种模式各 60 秒、合计 3433 帧持续测试通过。工程为 `build/video_board_schedule2/encoder_board.xml`，见 [本轮调度优化记录](docs/cyclegan_video_schedule_optimization.md)。
+
 本次四阶段板级迭代已完成：FPGA 自主执行 RGB 输入、三层编码、九个残差块、三层转置卷积和 **7×7 输出卷积/Tanh**，生成 **3×240×320 uint8 RGB 图像**。各阶段复用同一个计算单元和固定归一化参数，输出层采用四行预取、交替双槽及现有 DDR 写通道。完整 DDR/JTAG 网表为 **222 BRAM、22804 LUT4、12323 FF、100 DSP**；相对第三阶段仅新增 2 个权重 BRAM 和 2 个 Tanh BRAM，feature cache 未扩容。两次下载、四帧验收通过，共 **3302400 个值零差异**，全部输入 CRC 匹配，指令供应等待为零。150 MHz 下整网约 **46.61 ms**，输出层约 **12.71 ms**，setup/hold 余量 **0.799/0.035 ns**。DDR 相位为 6，板级签名 `0xe315`。详见 [第四阶段部署记录](docs/cyclegan_stage4_deployment.md)、[第四阶段验证证据](docs/analysis/cyclegan_stage4_deployment.json)、[第三阶段部署记录](docs/cyclegan_stage3_deployment.md)、[第二阶段资源优化](docs/cyclegan_stage2_resource_optimization.md) 和 [第一阶段记录](docs/cyclegan_stage1_deployment.md)。
 
 完整模型总线版（此前实现）支持 `netG_B_epoch11.pth` 的 7×7 输出生成器，采用 checkpoint 的固定 BN 统计生成 affine 参数。整网调度在主机端运行，编码、残差、四相转置卷积和 Tanh 复用同一计算单元。核心及全部缓存/模型参数/Tanh 综合为 **195 BRAM、15807 LUT4、4026 FF、100 DSP**（核心历史预算约 200，不包含 DDR/JTAG 板级壳）；**150 MHz** 内部时序通过布局布线检查，setup / hold 余量 **0.725 / 0.026 ns**。本轮采用 BRAM 与工作窗口同步初始化的折中方案，仅增加 **1124 LUT**：3×3 / 7×7 DW 仍连续发射 9 / 49 次 MAC，无填充执行时间从 77 / 117 降到 **52 / 92 拍**，150 MHz 下约 **347 / 613 ns**。PW 无舍入仍为 `Cin+8` 拍；需要修补的边每个增加 9 拍，排队弹出间隔在执行时间基础上加 1 拍。
@@ -24,7 +26,7 @@
 - 可写参数顶层：`rtl/mobilenet_bus_top.sv`
 - 主机调度与总线驱动：`tools/cyclegan_host.py`
 
-所有空间核及部分 tile 共用 **8 个 TDP BRAM 中的 256 byte 静态数据＋100 byte 寄存器工作窗口**。按 `(r+c) mod 8` 分 bank，一拍可以读出完整一行或一列，再截取十个边界像素补入工作窗口。左右 halo 按列加载，九个 tile 合计 34 次行/列写入；同一写入同时更新工作窗口，省去额外十行初始化读取。窗口为 5760 LUT，比上一版 4649 增加 1111；不使用 cache scratch。三个逻辑 cache 统一映射到 160 个 2048×5 TDP BRAM，模型参数 25，Tanh 2，合计 195。host/core 使用独立写端口，非法读用 BRAM 输出同步复位返回零。cache 逻辑容量仍为 1536×800 bit，支持 20 bit 主机切片写掩码，可逐行写入并按 tile 读取。ISA 的原有 feature 地址上限保持兼容。
+所有空间核及部分 tile 共用 **8 个 TDP BRAM 中的 256 byte 静态数据＋100 byte 寄存器工作窗口**。按 `(r+c) mod 8` 分 bank，一拍可以读出完整一行或一列，再截取十个边界像素补入工作窗口。完整九宫格装载合计 34 次行/列写入；当前完整 10×10 的前向 1×2/2×1 只装中心与一个 halo，2×2 只装中心与三个 halo，部分 tile 和 3×3/7×7 保留完整装载。同一写入同时更新工作窗口，省去额外十行初始化读取。窗口的第十轮映射为 5760 LUT，比上一版 4649 增加 1111；不使用 cache scratch。三个逻辑 cache 统一映射到 160 个 2048×5 TDP BRAM，模型参数 25，Tanh 2，合计 195。host/core 使用独立写端口，非法读用 BRAM 输出同步复位返回零。cache 逻辑容量仍为 1536×800 bit，支持 20 bit 主机切片写掩码，可逐行写入并按 tile 读取。ISA 的原有 feature 地址上限保持兼容。
 
 ## 复现
 
@@ -50,4 +52,4 @@ RTL 仿真使用 Icarus Verilog。综合脚本为 Efinity 建立 ASCII 路径副
 
 实时摄像头版本执行 `scripts/run_video_board.ps1 -Program`：SC2210 → BGGR/自动白平衡/Gamma → 320×240 完整网络 → HDMI，实体按键可切换原图与网络结果。运行 `scripts/verify_video_board.ps1` 可进行同帧数值比较和连续视频测试，详见 [实时视频部署记录](docs/cyclegan_video_deployment.md)。
 
-当前实时版本通过提前启动下一帧编码、重叠原图拷贝和 171.43 MHz 计算时钟提高帧率，复用现有 DDR 与缓存。资源和上板对比、独立验证目录的复现命令见 [帧率优化记录](docs/cyclegan_video_fps_optimization.md)。
+上一轮通过提前启动下一帧编码、重叠原图拷贝和 171.43 MHz 计算时钟提高帧率，见 [上一轮帧率优化记录](docs/cyclegan_video_fps_optimization.md)。本轮继续复用现有 DDR 与缓存，仅缩短前向小核装窗流程，资源和上板对比、复现命令见 [调度优化记录](docs/cyclegan_video_schedule_optimization.md)。

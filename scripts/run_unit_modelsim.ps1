@@ -24,7 +24,7 @@ try {
  } finally {Pop-Location}
  foreach($log in @('unit.log','bus.log')) {Copy-Item -LiteralPath (Join-Path $regressionStage $log) -Destination (Join-Path 'build/sim' $log)}
  Copy-Item -LiteralPath (Join-Path $regressionStage 'build/sim/commands.csv') -Destination build/sim/commands.csv
- & $Python sim/check_executor_cycles.py
+ & $Python sim/check_executor_cycles.py | Tee-Object -FilePath build/sim/executor_cycles.log
  if($LASTEXITCODE -ne 0) {throw 'Executor cycle regression failed'}
  Set-Content -LiteralPath build/stage2/unit_staging_path.txt -Value $regressionStage
 } finally {Pop-Location}

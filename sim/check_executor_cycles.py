@@ -41,9 +41,12 @@ for command, row in zip(commands, rows):
                      bool(edges & 4) and reflect,
                      bool(edges & 8) and (reflect or valid_h != 10)))
         area = (2, 2, 4, 9, 49)[kernel]
-        # 34 backing-store line writes, overlapped cache requests and live
-        # initialization. Each padding line still takes three clocks.
-        expected = area+43+9*sides-raw
+        # Full neighborhoods use 34 line writes. A forward full tile uses
+        # only center/right, center/bottom, or center/right/bottom/corner.
+        # Cache requests overlap the previous owner's final store. Each
+        # skipped halo therefore removes three clocks from the critical path.
+        load_cost = (22, 22, 28)[kernel] if kernel < 3 and valid_w == valid_h == 10 else 43
+        expected = area+load_cost+9*sides-raw
         if field(118) and not raw:
             expected += 54
     actual = int(row['cycles'])-1

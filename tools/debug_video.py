@@ -5,7 +5,7 @@ import argparse, hashlib, json, os, sys, time
 ROOT=Path(__file__).resolve().parents[1]
 _project_file=ROOT/'build/video_active_stage.txt'
 if not _project_file.exists():_project_file=ROOT/'build/video_verified/staging_path.txt'
-PROJECT=Path(_project_file.read_text().strip()) if _project_file.exists() else ROOT/'build/video_verified'
+PROJECT=Path(_project_file.read_text(encoding='utf-8-sig').strip()) if _project_file.exists() else ROOT/'build/video_verified'
 os.environ.setdefault('EFINITY_USER_DIR',str(PROJECT/'vendor_user'))
 sys.path.insert(0,str(Path(os.environ['EFINITY_HOME'])/'debugger/bin'))
 from efx_dbg.define import DebugProfileBuilder

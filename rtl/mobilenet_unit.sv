@@ -46,6 +46,10 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     wire [2:0] write_mode=cmd[49:47];
     wire [1:0] pad_kind=cmd[51:50],pad_width=cmd[53:52];
     wire [3:0] edges=cmd[57:54],valid_w=cmd[61:58]+4'd1,valid_h=cmd[65:62]+4'd1;
+    // Forward 1x2/2x1/2x2 kernels use only the center and right/bottom
+    // neighbors. Partial tiles retain the full neighborhood: reflected
+    // padding of a narrow edge tile can reach the opposite halo.
+    wire forward_window=kernel<3 && valid_w==10 && valid_h==10;
     wire [9:0] tile_pitch=cmd[75:66],row_pitch=cmd[85:76];
     wire rounding=cmd[86],keep_acc=cmd[87],more_acc=cmd[88],stride2=cmd[89];
     reg [2:0] kh,kw;
@@ -315,7 +319,10 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
                 CLEAR:begin
                     acc_channels<=keep_acc ? acc_channels+terms : terms;if(!keep_acc) acc_live<=0;
                     channel_idx<=rounding && !keep_acc ? 0 : 1;
-                    if(spatial && kernel!=5) begin owner<=0;pad_pending<=0;final_load_queued<=0;state<=LOAD_DRAIN;end
+                    if(spatial && kernel!=5) begin
+                        owner<=forward_window ? (kernel==1 ? 7 : 5) : 0;
+                        pad_pending<=0;final_load_queued<=0;state<=LOAD_DRAIN;
+                    end
                     else if(opcode==`MN_OP_NORM) state<=N_X;
                     else if(rounding && !keep_acc) state<=opcode==`MN_OP_ADD ? ADD_FIRST : PW_RUN;
                     else if(opcode==`MN_OP_ADD) state<=ADD_SECOND;
@@ -323,7 +330,11 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
                 end
                 LOAD_DRAIN:begin
                     if(window_load_last) begin
-                        if(owner!=9) owner<=owner==3 ? 5 : owner+1'b1;
+                        if(owner!=9) begin
+                            if(forward_window)
+                                owner<=kernel!=2 ? 9 : owner==5 ? 7 : owner==7 ? 8 : 9;
+                            else owner<=owner==3 ? 5 : owner+1'b1;
+                        end
                         else final_load_queued<=1;
                     end
                     if(window_load_done && final_load_queued) begin

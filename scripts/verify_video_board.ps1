@@ -1,7 +1,7 @@
 param([string]$EfinityRoot='D:\Efinity\2026.1',
  [string]$Python='C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe',
  [string]$UsbUrl='ftdi://0x0403:0x6014:3:7/1',[string]$OutputDir='build/video_verified',
- [int]$SecondsPerMode=60,[switch]$ReuseCapture,[string]$PhysicalConfirmation='',
+ [int]$SecondsPerMode=60,[switch]$ReuseCapture,[switch]$DeferRecord,[string]$PhysicalConfirmation='',
  [string]$RecordPath='docs/analysis/cyclegan_video_fps_optimization.json',
  [string]$Baseline='docs/analysis/cyclegan_video_deployment.json')
 $ErrorActionPreference='Stop'
@@ -32,6 +32,9 @@ try {
 }
 if($validated) {
  if(!$restoreValid) {throw 'Automatic key control restoration failed; inspect restore.log'}
+ # Long native simulations can run alongside live hardware tests. The final
+ # evidence tool still requires their completed logs and matching RTL hashes.
+ if($DeferRecord) {Write-Output 'VIDEO_LIVE_TESTS_PASS; final evidence record deferred';return}
  Push-Location (Split-Path -Parent $PSScriptRoot)
  try {
   $extra=@('--record-path',$RecordPath);if($PhysicalConfirmation) {$extra+=@('--physical-confirmation',$PhysicalConfirmation)}
