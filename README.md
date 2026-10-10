@@ -2,6 +2,8 @@
 
 目标器件 Ti60 F225，Efinity 2026.1；100 路 DSP、10×10 tile、signed8 Q4.4 数据和 signed16 Q8.8 参数。
 
+新增摄像头实拍图片的JTAG输入与HDMI验证模式，使用 `pe10_10/camera_original.png` 的原始320×240像素，由当前FPGA整网计算后保持显示。静态验证工程位于 `build/video_image_verified/project/encoder_board.xml`；实时摄像头工程继续保留。执行 `scripts/verify_video_image.ps1` 可复现上传、整网计算、完整回读比较及HDMI校验，见 [实拍图片验证记录](docs/cyclegan_video_image.md)。
+
 当前实时摄像头版本已在残差区的 **18/26 个归一化点、576 个通道**恢复同帧实例归一化，采用4路旁路统计和共享的易灵思非流水线开根/除法 IP，继续复用100路主 PE。残差区相比固定归一化仅增加 **531拍、3.10微秒**，无新增特征 DDR 读写，指令供应等待为0。计算时钟仍为171.43 MHz，完整视频工程为 **28367 LUT4、14537 FF、253/256 BRAM、104 DSP48＋4 DSP24**。工程为 `build/video_board_instance_residual/encoder_board.xml`，见 [残差同帧归一化记录](docs/cyclegan_residual_instance_norm.md)。编码器5个点与转置卷积3个点将在后续阶段恢复。
 
 本轮风格模式 **27.54 FPS**、原图模式 **28.77 FPS**，两种模式合计1742帧持续测试通过；同帧摄像头230400个RGB字节与整数参考零差异，两组完整原生RTL仿真均通过。

@@ -1,7 +1,8 @@
 `timescale 1ns/1ps
 // Ti60 DDR + shared CycleGAN compute core + official Efinity JTAG VIO.
-// command[31]=toggle, [30:28]=1 frame begin,2 data64,3 run,4 cache read,5 clear,6 DDR read64.
-module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
+// command[31]=toggle, [30:28]=3 control,4 quality,5 metric,6 DDR read64.
+// HOST_IMAGE additionally enables 1 frame begin and 2 RGBx data64.
+module cyclegan_camera_board #(parameter SIM_CAMERA=0,HOST_IMAGE=0) (
  input wire clk_video,clk_video_5x,clk_video_fb,video_pll_lock,
  output wire video_pll_rstn_o,
  output wire hdmi_txc_oe,hdmi_txd0_oe,hdmi_txd1_oe,hdmi_txd2_oe,
@@ -85,6 +86,19 @@ module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
   .awvalid(awvalid),.awready(awready),.awaddr(awaddr),.awlen(awlen),
   .wvalid(wvalid),.wready(wready),.wdata(wdata),.wlast(wlast),.bvalid(bvalid),.bready(bready));
  wire [31:0] command;reg ack=0,protocol_error=0,pending=0;
+ wire [511:0] host_payload;
+ reg host_begin=0,host_load=0,host_pending=0;
+ wire host_armed,host_busy,host_done,host_valid,host_sof,host_eof;
+ wire [23:0] host_rgb;
+ generate if(HOST_IMAGE) begin:g_host
+  camera_jtag_input u_input(.clk(clk_sys),.rstn(drstn),.begin_frame(host_begin),.load_chunk(host_load),
+   .payload(host_payload),.armed(host_armed),.busy(host_busy),.chunk_done(host_done),
+   .valid(host_valid),.sof(host_sof),.eof(host_eof),.rgb(host_rgb));
+ end else begin:g_no_host
+  assign host_payload=0;
+  assign {host_armed,host_busy,host_done,host_valid,host_sof,host_eof}=0;
+  assign host_rgb=0;
+ end endgenerate
  wire running;wire [15:0] frames;wire [31:0] read_base,read_id;wire [3:0] slots;wire pp_fault;
  wire acquire,release_frame,acquired,committed;
  wire [2:0] core_state,schedule_diag,capture_write_diag,core_read_diag,display_read_diag;
@@ -99,7 +113,7 @@ module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
  assign camera_pll_rstn_o=sys_pll_lock;
  assign csi_ctl0_o=0;assign csi_ctl0_oe=0;assign csi_ctl1_o=0;assign csi_ctl1_oe=0;
  assign {csi_rxd3_rst_o,csi_rxd2_rst_o,csi_rxd1_rst_o,csi_rxd0_rst_o}={4{!drstn}};
- generate if(!SIM_CAMERA) begin:g_camera
+ generate if(!SIM_CAMERA && !HOST_IMAGE) begin:g_camera
   camera_sc2210 u_sensor(.clk(clk_sys),.rstn(drstn && camera_pll_lock),
    .csi_scl_o(csi_scl_o),.csi_scl_oe(csi_scl_oe),.csi_sda_o(csi_sda_o),.csi_sda_oe(csi_sda_oe),.csi_sda_i(csi_sda_i),
    .csi_rxc_i(csi_rxc_i),.csi_rxc_lp_p_i(csi_rxc_lp_p_i),.csi_rxc_lp_n_i(csi_rxc_lp_n_i),
@@ -112,7 +126,11 @@ module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
    .source_frames(source_frames),.overruns(crop_overruns),.last_line_pixels(last_line_pixels),.white_balance_gains(white_balance_gains));
  end else begin:g_sim
   reg inject_valid=0,inject_sof=0,inject_eof=0,inject_abort=0;reg [23:0] inject_rgb=0;
-  assign rgb_valid=inject_valid;assign rgb_sof=inject_sof;assign rgb_eof=inject_eof;assign frame_abort=inject_abort;assign camera_rgb=inject_rgb;
+  assign rgb_valid=HOST_IMAGE ? host_valid : inject_valid;
+  assign rgb_sof=HOST_IMAGE ? host_sof : inject_sof;
+  assign rgb_eof=HOST_IMAGE ? host_eof : inject_eof;
+  assign frame_abort=HOST_IMAGE ? 1'b0 : inject_abort;
+  assign camera_rgb=HOST_IMAGE ? host_rgb : inject_rgb;
   assign configured=1;assign source_frames=0;assign crop_overruns=0;assign last_line_pixels=1920;
   assign white_balance_gains={10'd256,10'd256,10'd256};
   assign {csi_scl_o,csi_scl_oe,csi_sda_o,csi_sda_oe}=4'b0100;
@@ -147,7 +165,7 @@ module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
   .t_wvalid(cp_wvalid),.t_wready(cp_wready),.t_wdata(cp_wdata),.t_wlast(cp_wlast),.t_bvalid(cp_bvalid),.t_bready(cp_bready),
   .awvalid(p_awvalid),.awready(p_awready),.awaddr(p_awaddr),.awlen(p_awlen),
   .wvalid(p_wvalid),.wready(p_wready),.wdata(p_wdata),.wlast(p_wlast),.bvalid(p_bvalid),.bready(p_bready));
- reg [2:0] control=0;wire key_style,key_pressed;
+ reg [2:0] control=HOST_IMAGE ? 3'd7 : 3'd0;wire key_style,key_pressed;
  camera_key u_key(.clk(clk_sys),.rstn(drstn),.key_n(key_data[0]),.style(key_style),.pressed(key_pressed));
  wire requested_style=control[0] ? control[1] : key_style;
  wire ready_toggle,ready_slot,frame_ack_toggle,active_slot,active_style,schedule_start;
@@ -286,11 +304,21 @@ module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
   end
  end
  always @(posedge clk_sys) begin
-  if(!drstn) begin ack<=0;protocol_error<=0;pending<=0;control<=0;debug_toggle<=0;debug_address<=0;metric_index<=0;quality_active<=0;quality_index<=0;dbg_done1<=0;dbg_done2<=0;dbg_seen<=0;end
+  host_begin<=0;host_load<=0;
+  if(!drstn) begin ack<=0;protocol_error<=0;pending<=0;host_pending<=0;control<=HOST_IMAGE ? 3'd7 : 3'd0;debug_toggle<=0;debug_address<=0;metric_index<=0;quality_active<=0;quality_index<=0;dbg_done1<=0;dbg_done2<=0;dbg_seen<=0;end
   else begin
    dbg_done1<=debug_complete;dbg_done2<=dbg_done1;
    if(!pending && command[31]!=ack) begin
     case(command[30:28])
+     1:begin
+      if(HOST_IMAGE && enable && control[2] && !running && !host_busy && !host_armed && slots==0)
+       begin host_begin<=1;protocol_error<=0;end
+      else protocol_error<=1;
+      ack<=command[31];
+     end
+     2:if(HOST_IMAGE && enable && control[2] && !running && host_armed && !host_busy)
+       begin host_load<=1;host_pending<=1;pending<=1;protocol_error<=0;end
+       else begin protocol_error<=1;ack<=command[31];end
      3:begin control<=command[2:0];protocol_error<=0;ack<=command[31];end
      4:begin quality_active<=1;quality_index<=command[3:0];protocol_error<=0;ack<=command[31];end
      5:begin quality_active<=0;metric_index<=command[4:0];protocol_error<=0;ack<=command[31];end
@@ -299,11 +327,22 @@ module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
      default:begin protocol_error<=1;ack<=command[31];end
     endcase
    end
-   if(pending && dbg_done2!=dbg_seen) begin dbg_seen<=dbg_done2;ack<=command[31];pending<=0;end
+   if(pending && host_pending && host_done) begin ack<=command[31];pending<=0;host_pending<=0;end
+   if(pending && !host_pending && dbg_done2!=dbg_seen) begin dbg_seen<=dbg_done2;ack<=command[31];pending<=0;end
   end
  end
  wire [15:0] chunks=0;
- wire [31:0] status={16'he316,cal_done,cal_pass,protocol_error,pp_fault,bridge_fault,core_fault,running,ack,slots,configured,1'b0,requested_style,video_fault};
+ wire [31:0] status={HOST_IMAGE ? 16'he317 : 16'he316,cal_done,cal_pass,protocol_error,pp_fault,bridge_fault,core_fault,running,ack,slots,configured,1'b0,requested_style,video_fault};
+ generate if(HOST_IMAGE) begin:g_image_debug
+ edb_top u_debug(.bscan_CAPTURE(bscan_CAPTURE),.bscan_DRCK(bscan_DRCK),.bscan_RESET(bscan_RESET),
+  .bscan_RUNTEST(bscan_RUNTEST),.bscan_SEL(bscan_SEL),.bscan_SHIFT(bscan_SHIFT),.bscan_TCK(bscan_TCK),
+  .bscan_TDI(bscan_TDI),.bscan_TMS(bscan_TMS),.bscan_UPDATE(bscan_UPDATE),.bscan_TDO(bscan_TDO),.vio0_clk(clk_sys),
+  .vio0_status(status),.vio0_cycles(cycles),.vio0_mac_cycles(mac_cycles),.vio0_first_cycle(first_cycle),
+  .vio0_encoder_cycles(encoder_cycles),.vio0_residual_cycles(residual_cycles),.vio0_progress(progress),
+  .vio0_counts({frames,chunks}),.vio0_frame_id(read_id),.vio0_calibration({18'd0,phase_applied,3'd6,cal_shift,cal_log}),
+  .vio0_read_data0(read_data[255:0]),.vio0_read_data1(read_data[511:256]),.vio0_block_metric(block_metric),
+  .vio0_command(command),.vio0_payload0(host_payload[255:0]),.vio0_payload1(host_payload[511:256]));
+ end else begin:g_camera_debug
  edb_top u_debug(.bscan_CAPTURE(bscan_CAPTURE),.bscan_DRCK(bscan_DRCK),.bscan_RESET(bscan_RESET),
   .bscan_RUNTEST(bscan_RUNTEST),.bscan_SEL(bscan_SEL),.bscan_SHIFT(bscan_SHIFT),.bscan_TCK(bscan_TCK),
   .bscan_TDI(bscan_TDI),.bscan_TMS(bscan_TMS),.bscan_UPDATE(bscan_UPDATE),.bscan_TDO(bscan_TDO),.vio0_clk(clk_sys),
@@ -313,4 +352,5 @@ module cyclegan_camera_board #(parameter SIM_CAMERA=0) (
   .vio0_counts({frames,chunks}),.vio0_frame_id(read_id),.vio0_calibration({18'd0,phase_applied,3'd6,cal_shift,cal_log}),
   .vio0_read_data0(read_data[255:0]),.vio0_read_data1(read_data[511:256]),.vio0_block_metric(block_metric),
   .vio0_command(command));
+ end endgenerate
 endmodule

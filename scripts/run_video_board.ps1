@@ -1,4 +1,4 @@
-param([string]$EfinityRoot='D:\Efinity\2026.1',[switch]$ReuseBuild,[switch]$Program,
+param([string]$EfinityRoot='D:\Efinity\2026.1',[switch]$ReuseBuild,[switch]$Program,[switch]$HostImage,
  [string]$Python='C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe',
  [string]$UsbUrl='ftdi://0x0403:0x6014:3:7/1',[string]$OutputDir='build/video_verified')
 $ErrorActionPreference='Stop'
@@ -8,7 +8,9 @@ try {
  if($ReuseBuild) {$videoStage=(Get-Content -LiteralPath "$OutputDir/staging_path.txt" -Raw).Trim()}
  else {
   $videoStage=Join-Path $env:TEMP ('cyclegan_video_'+[guid]::NewGuid().ToString('N'))
-  & (Join-Path $EfinityRoot 'bin/python3.bat') tools/prepare_video_deployment.py --board $videoStage > "$OutputDir/prepare_board.log" 2>&1
+  $prepareArgs=@('tools/prepare_video_deployment.py','--board',$videoStage)
+  if($HostImage) {$prepareArgs+='--host-image'}
+  & (Join-Path $EfinityRoot 'bin/python3.bat') @prepareArgs > "$OutputDir/prepare_board.log" 2>&1
   if(!(Select-String -LiteralPath "$OutputDir/prepare_board.log" -Pattern '^VIDEO_BOARD_READY' -Quiet)) {throw 'Video project preparation failed'}
   Set-Content -LiteralPath "$OutputDir/staging_path.txt" -Value $videoStage
   Push-Location $videoStage
@@ -20,10 +22,23 @@ try {
     Write-Output "VIDEO_FLOW_PASS $flow"
    }
   } finally {Pop-Location}
+  if($HostImage) {
+   $localVideoStage=Join-Path (Get-Location) ($OutputDir+'/project')
+   New-Item -ItemType Directory -Force -Path $localVideoStage | Out-Null
+   Copy-Item -Path "$videoStage/*" -Destination $localVideoStage -Recurse -Force
+   $videoStage=$localVideoStage
+   Set-Content -LiteralPath "$OutputDir/staging_path.txt" -Value $videoStage
+  }
  }
  $sourceGate='import hashlib,json,pathlib,sys; r=pathlib.Path.cwd(); p=pathlib.Path(sys.argv[1]); m=json.loads((p/"source_manifest.json").read_text()); sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest(); assert all(sha(r/"rtl"/n)==h for n,h in m["rtl_sha256"].items()),"Stale video RTL"; assert all(sha(r/"board/video"/n)==h for n,h in m["board_sha256"].items()),"Stale board templates"'
  & $Python -c $sourceGate $videoStage
  if($LASTEXITCODE -ne 0) {throw 'Video source manifest mismatch'}
+ if($HostImage) {
+  $photoManifest=Get-Content -LiteralPath (Join-Path $videoStage 'source_manifest.json') -Raw | ConvertFrom-Json
+  if($photoManifest.video_contract.input_mode -ne 'JTAG fixed RGBx image; sensor disabled') {throw 'Requires fixed-image project'}
+  $photoTopHash=(Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $videoStage 'cyclegan_camera_board.sv')).Hash.ToLowerInvariant()
+  if($photoTopHash -ne $photoManifest.video_contract.staged_top_sha256) {throw 'Stale fixed-image top'}
+ }
  foreach($flow in @('map','pnr','pgm')) {
   if(!(Select-String -LiteralPath (Join-Path $videoStage "$flow.console.log") -Pattern "$flow\s*:\s*PASS" -Quiet)) {throw "Missing $flow PASS"}
  }

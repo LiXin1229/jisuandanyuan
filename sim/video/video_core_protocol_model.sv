@@ -1,5 +1,6 @@
 // Simulation-only network protocol source; never a synthesis input.
-module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0, DECODER_ENABLE=0, OUTPUT_ENABLE=0) (
+module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0, DECODER_ENABLE=0, OUTPUT_ENABLE=0,
+ RESIDUAL_INSTANCE_NORM=0,CORE_DELAY=8000000) (
  input wire clk,rstn,start,input wire [31:0] frame_base,
  output wire busy,output reg done,fault,
  output reg [31:0] cycles,output reg [31:0] mac_cycles,first_output_cycle,
@@ -52,7 +53,7 @@ module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0, DECODE
       $fatal(1,"Network protocol source read mismatched frame=%0d word=%0d",variant,word_index+i);
      if(word_index==19196) state<=DELAY;else begin word_index<=word_index+4;state<=REQUEST;end
     end
-    DELAY:if(cycles>=8000000) state<=WRITE;
+    DELAY:if(cycles>=CORE_DELAY) state<=WRITE;
     WRITE:if(feature_write_ready) begin
      if(!half) half<=1;
      else if(tile==2303) state<=DRAIN;

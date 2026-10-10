@@ -20,21 +20,28 @@ class VideoBoard:
   self.compute_mhz=manifest.get('video_contract',{}).get('compute_mhz',150)
   self.manager=JtagManager()
   self.jtag=self.manager.config_jtag(url=url,tap='efx_ti',user='USER1',freq=freq)
-  p,_=DebugProfileBuilder.from_file(str(profile_path or PROJECT/'debug_profile.json'))
+  with self.jtag.get_engine() as engine:
+   self.ftdi=engine._engine_provider._ctrl.ftdi
+   self.previous_latency=self.ftdi.get_latency_timer();self.ftdi.set_latency_timer(1)
+  profile_path=Path(profile_path or PROJECT/'debug_profile.json')
+  self.has_payload=any(x['name']=='payload0' for x in json.loads(profile_path.read_text())['debug_cores'][0]['probes'])
+  p,_=DebugProfileBuilder.from_file(str(profile_path))
   self.debug=self.manager.config_debug(self.jtag,p);self.manager.validate_debug_cores(self.debug)
-  s=self.read();self.signature=s['status']>>16;assert self.signature in (0xe316,),s
+  s=self.read();self.signature=s['status']>>16;assert self.signature in (0xe316,0xe317),s
   self.toggle=(s['status']>>8)&1
   print('JTAG_CAMERA_CONNECTED '+json.dumps({k:v for k,v in s.items() if k!='data'}),flush=True)
  def read(self):
   v=[int(x) for x in self.manager.read_vio(self.debug,'vio0')]
-  if v[0]>>16 not in (0xe316,):
+  if v[0]>>16 not in (0xe316,0xe317):
    raise RuntimeError(f'Invalid camera VIO signature 0x{v[0]>>16:04x}; reconnect JTAG and verify the programmed image')
   return dict(status=v[0],cycles=v[1],prefix_mac_cycles=v[2],first_cycle=v[3],processed_frames=v[4]>>16,
    frame_id=v[5],calibration=v[6],encoder_cycles=v[7],residual_cycles=v[8],progress=v[9],
    data=v[10]|v[11]<<256,metric=v[12],completed=(v[9]>>5)&15)
- def command(self,op,arg=0):
+ def command(self,op,arg=0,payload=0):
   self.toggle^=1
-  self.manager.set_vio_probe_out(self.debug,'vio0',[BitSequence((self.toggle<<31)|(op<<28)|arg,length=32)])
+  outputs=[BitSequence((self.toggle<<31)|(op<<28)|arg,length=32)]
+  if self.has_payload:outputs.extend([BitSequence(payload&((1<<256)-1),length=256),BitSequence(payload>>256,length=256)])
+  self.manager.set_vio_probe_out(self.debug,'vio0',outputs)
   self.manager.write_vio(self.debug,'vio0')
   deadline=time.monotonic()+10
   while True:
@@ -63,21 +70,23 @@ class VideoBoard:
    ('wvalid',3),('wready',2),('bvalid',1),('bready',0),('capture_active',11),('video_active',12)]}
   s['compute_mhz']=self.compute_mhz
   s['compute_ms']=s['cycles']/(self.compute_mhz*1000)
-  s['display_scale']=2 if self.signature==0xe316 else 3
+  s['display_scale']=2
   s['camera_roi']=[640,480] if self.signature==0xe316 else [320,240]
-  if self.signature==0xe316:
+  if self.signature in (0xe316,0xe317):
    gains=self.command(4,0)['metric']
    s['awb_gains_q8']={'r':gains>>20&1023,'g':gains>>10&1023,'b':gains&1023}
    s['expected_original_sum0']=self.command(4,1)['metric']
    s['expected_original_sum1']=self.command(4,2)['metric']
-  if self.signature==0xe316:
+  if self.signature in (0xe316,0xe317):
    diag=[self.command(4,i)['metric'] for i in range(3,7)]
    s['last_original_error']=dict(expected_sum=diag[0],ddr_sum=diag[1],video_sum=diag[2],
     display_frame=diag[3]>>16,slot=diag[3]>>9&1,ddr_lines=diag[3]&511)
   s.update(command_wait_cycles=self.metric(0),data_wait_cycles=self.metric(1),input_checksum=self.metric(2),output_status=self.metric(5),output_cycles=self.metric(14))
   s['copy_ms']=metrics[28]/96000;s['total_ms']=metrics[27]/96000
   return s
- def close(self):self.manager.unconfig_jtag(self.jtag)
+ def close(self):
+  self.ftdi.set_latency_timer(self.previous_latency)
+  self.manager.unconfig_jtag(self.jtag)
 
 def main():
  p=argparse.ArgumentParser(description=__doc__)

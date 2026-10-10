@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import prepare_encoder_deployment as base
 ROOT=base.ROOT
 
-def prepare(dest):
+def prepare(dest,host_image=False):
  dest=dest.resolve();base.board(dest,residual=True,decoder=True,output=True)
  manifest=json.loads((dest/'source_manifest.json').read_text())
  video=sorted((ROOT/'rtl/video').glob('*.v'))+sorted((ROOT/'rtl/video').glob('*.sv'))
@@ -28,10 +28,19 @@ def prepare(dest):
  ns='http://www.efinixinc.com/enf_proj';ET.register_namespace('efx',ns);n={'e':ns}
  tree=ET.parse(dest/'encoder_board.xml');project=tree.getroot();design=project.find('e:design_info',n)
  design.find('e:top_module',n).set('name','cyclegan_camera_board')
+ if host_image:
+  # The optional source replaces the sensor, while retaining the current core.
+  source=dest/'cyclegan_camera_board.sv'
+  source.write_text(source.read_text().replace('SIM_CAMERA=0,HOST_IMAGE=0','SIM_CAMERA=0,HOST_IMAGE=1'))
+  manifest['video_contract']['input_mode']='JTAG fixed RGBx image; sensor disabled'
+  manifest['video_contract']['staged_top_sha256']=hashlib.sha256(source.read_bytes()).hexdigest()
  for e in list(design):
   if e.tag.endswith('design_file') and e.get('name') in ('frame_pingpong.v','AXI4_AWARMux.v','cyclegan_encoder_board.v'):design.remove(e)
  for source in video:design.insert(1,ET.Element('{'+ns+'}design_file',name=source.name,version='default',library='default'))
  profile=json.loads((ROOT/'board/video/debug_profile.json').read_text())
+ if host_image:
+  profile['debug_cores'][0]['uuid']='e3177cfe3110414c8c948a9d7e1e3ac5'
+  profile['debug_cores'][0]['probes'].extend(dict(name='payload'+str(i),width=256,init='0x0') for i in range(2))
  (dest/'debug_profile.json').write_text(json.dumps(profile,indent=2)+'\n')
  efx=Path(os.environ.get('EFINITY_HOME',r'D:/Efinity/2026.1'))
  sys.path.insert(0,str(efx/'debugger/bin'))
@@ -52,4 +61,5 @@ def prepare(dest):
 
 if __name__=='__main__':
  ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--board',required=True,type=Path)
- prepare(ap.parse_args().board)
+ ap.add_argument('--host-image',action='store_true')
+ args=ap.parse_args();prepare(args.board,args.host_image)
