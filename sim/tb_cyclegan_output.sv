@@ -25,7 +25,7 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
  reg read_pending=0,write_pending=0,response_pending=0;
  string vectors;reg [799:0] expected;reg [399:0] expected_half;reg [31:0] saved_cycles,saved_output_cycles;
  wire [127:0] core_fifo_head;integer output_jobs=0;
- wire fifo_pop,core_cache_rd_en,prefix_fault,decoder_active;
+ wire fifo_pop,core_cache_rd_en,prefix_fault,decoder_active,normalizing_output;
  wire [10:0] core_cache_rd_addr;wire [127:0] core_cmd;wire [799:0] core_result;
  wire [1:0] decoder_layer,slot_owned,slot_ready;wire [4:0] decoder_y,decoder_loaded;wire [3:0] pack_state;
  wire [4:0] decoder_co;wire [3:0] blocks_completed;wire [31:0] prefix_total_cycles,input_checksum;
@@ -47,6 +47,7 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
  assign core_cmd=unit.cmd;assign core_result=unit.result_data;assign prefix_fault=0;assign decoder_active=1;
  assign decoder_layer=scheduler.layer;assign decoder_y=scheduler.y;assign decoder_co=scheduler.co;
  assign decoder_loaded=scheduler.loaded_rows;assign slot_owned=scheduler.owned;assign slot_ready=scheduler.ready_slots;assign pack_state=scheduler.pack_state;
+ assign normalizing_output=1;
  assign blocks_completed=0;assign prefix_total_cycles=cycles+output_cycles;assign input_checksum=0;
  end else begin:g_prefix
  cyclegan_encoder #(.RESIDUAL_ENABLE(1),.DECODER_ENABLE(1),.OUTPUT_ENABLE(1),.RESIDUAL_INSTANCE_NORM(RESIDUAL_INSTANCE_NORM),.FULL_INSTANCE_NORM(FULL_INSTANCE_NORM)) dut(.clk(clk),.rstn(rstn),.start(start),.frame_base(32'd0),
@@ -55,7 +56,8 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
   .dbg_rd(1'b0),.dbg_addr(11'd0),.pause_each_block(pause_each_layer),.resume(resume),.paused(paused),.blocks_completed(blocks_completed),
   .output_completed(output_completed),.output_cycles(output_cycles),.layers_completed(layers_completed),.decoder_cycles(cycles),.layer_cycles(layer_cycles),
   .feature_write_valid(write_valid),.feature_write_ready(write_ready),.feature_write_addr(write_addr),.feature_write_data(write_data));
- always @(posedge clk) if(rstn && FULL_INSTANCE_NORM) begin
+ if(FULL_INSTANCE_NORM) begin:g_full_checks
+ always @(posedge clk) if(rstn) begin
   if(dut.g_normalization.normalization.write_a) begin
    ci=dut.g_normalization.normalization.gamma_base+dut.g_normalization.normalization.request_channel*2;
    if(dut.g_normalization.normalization.a!==gold_coeff[ci] || dut.g_normalization.normalization.b!==gold_coeff[ci+1])
@@ -74,6 +76,8 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
    encoder_checks=encoder_checks+25;
   end
  end
+ end
+ assign normalizing_output=FULL_INSTANCE_NORM==1 || dut.pass_busy || decoder_layer==3;
  assign fifo_pop=dut.unit.fifo_pop;assign core_cache_rd_en=dut.unit.cache_rd_en;assign core_cache_rd_addr=dut.unit.cache_rd_addr;
  assign core_fifo_head=dut.unit.fifo_head;
  assign core_cmd=dut.unit.cmd;assign core_result=dut.unit.result_data;assign core_done=dut.core_done;assign core_busy=dut.core_busy;
@@ -135,7 +139,7 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
    residual_values=residual_values+100;
   end
   if(req_valid && req_ready) reads=reads+1;
-  if(write_valid && write_ready && (!FULL_INSTANCE_NORM || decoder_active && (FULL_INSTANCE_NORM==1 || g_prefix.dut.pass_busy || decoder_layer==3))) begin
+  if(write_valid && write_ready && (!FULL_INSTANCE_NORM || decoder_active && normalizing_output)) begin
    region=write_addr[23:20];index=(write_addr&32'hfffff)>>7;half=write_addr[6];
    if(region==3) expected=gold1[index];else if(region==4) expected=gold2[index];else if(region==5) expected=gold3[index];else expected=gold4[index];
    expected_half=half ? expected[799:400] : expected[399:0];
@@ -206,6 +210,7 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
   if(!FULL_INSTANCE_NORM && (commands!=(FULL_PREFIX ? 170880 : OUTPUT_ONLY ? 18432 : 125184) || halves!=(OUTPUT_ONLY ? 4608 : 21504) || checks!=(OUTPUT_ONLY ? 230400 : 1075200) || values!=(OUTPUT_ONLY ? 230400 : 1075200) || reads!=(FULL_PREFIX ? 24576 : OUTPUT_ONLY ? 12288 : 16896) || overlap==0 || layers_completed!=(OUTPUT_ONLY ? 0 : 3) || !output_completed)) $fatal(1,"Counts commands=%0d halves=%0d checks=%0d reads=%0d",commands,halves,checks,reads);
   if(FULL_PREFIX && (residual_values!=345600 || input_checksum!==expected_crc[0])) $fatal(1,"Full prefix residual/CRC mismatch");
   if(output_jobs!=2304 || command_wait_cycles!=0) $fatal(1,"Output scheduling/count mismatch");
+  if(FULL_INSTANCE_NORM && (commands!=170880 || halves!=21504 || checks!=1075200 || values!=1075200 || reads!=(FULL_INSTANCE_NORM==2 ? 76800 : 59904) || output_jobs!=2304)) $fatal(1,"Full IN traffic counts commands=%0d halves=%0d reads=%0d",commands,halves,reads);
   if(FULL_INSTANCE_NORM && (coefficient_checks!=(FULL_INSTANCE_NORM==2 ? 688 : 656) || encoder_checks!=268800)) $fatal(1,"Full IN checks coeff=%0d encoder=%0d",coefficient_checks,encoder_checks);
   $display("FULL_IN_COUNTS coefficients=%0d encoder=%0d",coefficient_checks,encoder_checks);
   $display("PASS stage4: full_prefix=%0d output_only=%0d values=%0d residual_values=%0d commands=%0d decoder_cycles=%0d output_cycles=%0d prefix_cycles=%0d command_wait=%0d data_wait=%0d halves=%0d reads=%0d overlap=%0d",FULL_PREFIX,OUTPUT_ONLY,values,residual_values,commands,cycles,output_cycles,prefix_total_cycles,command_wait_cycles,data_wait_cycles,halves,reads,overlap);

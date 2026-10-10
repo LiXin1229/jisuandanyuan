@@ -1,4 +1,4 @@
-param([string]$EfinityRoot='D:\Efinity\2026.1',
+param([int]$NormPoints=18,[string]$EfinityRoot='D:\Efinity\2026.1',
  [string]$Python='C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe',
  [string]$UsbUrl='ftdi://0x0403:0x6014:3:7/1',[string]$OutputDir='build/video_instance_residual_verified',
  [int]$SecondsPerMode=30,[switch]$ReuseCapture,[switch]$DeferRecord)
@@ -12,7 +12,7 @@ try {
   & $efxPython tools/capture_video_pair.py --url $UsbUrl --profile $profile --bitstream $bit --output $pairDir > "$OutputDir/capture.log" 2>&1
   if(!(Select-String -LiteralPath "$OutputDir/capture.log" -Pattern '^MATCHED_PAIR_CAPTURE_PASS' -Quiet)) {throw 'IN same-frame capture failed'}
  }
- & $Python -B tools/verify_instance_norm_deployment.py --pair $pairDir > "$OutputDir/pair_reference.log" 2>&1
+ & $Python -B tools/verify_instance_norm_deployment.py --pair $pairDir --live-points $NormPoints > "$OutputDir/pair_reference.log" 2>&1
  if($LASTEXITCODE -ne 0) {throw 'IN same-frame numerical comparison failed'}
  Write-Output 'INSTANCE_LIVE_NUMERICAL_PASS'
  foreach($mode in @('style','original')) {
@@ -30,6 +30,7 @@ try {
 }
 if($validated) {
  if(!$restoreValid) {throw 'IN automatic key control restore failed'}
+ if($NormPoints -ne 18 -and !$DeferRecord) {throw 'Use record_full_instance_norm.py to record the complete IN deployment'}
  if($DeferRecord) {Write-Output 'INSTANCE_HARDWARE_PASS; numerical and stream evidence saved';return}
  Push-Location (Split-Path -Parent $PSScriptRoot)
  try {

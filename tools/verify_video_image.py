@@ -55,10 +55,12 @@ def record(out):
         text=(out/name).read_text();assert marker in text and '** Fatal:' not in text
         simulations[name]=dict(sha256=sha(out/name),pass_line=next(l for l in text.splitlines() if marker in l))
     # Reuse the previous native full-network proof only for identical core RTL.
-    baseline=ROOT/'docs/analysis/cyclegan_residual_instance_norm.json'
+    points=deployment['normalization']['live_points']
+    baseline=ROOT/'docs/analysis'/({18:'cyclegan_residual_instance_norm.json',23:'cyclegan_encoder_instance_norm.json',26:'cyclegan_full_instance_norm.json'}[points])
     previous=json.loads(baseline.read_text())
     unchanged_core={n:h for n,h in manifest['rtl_sha256'].items() if not n.startswith('video/')}
-    assert all(previous['sources']['rtl_sha256'].get(n)==h for n,h in unchanged_core.items())
+    previous_sources=previous.get('source_manifest',previous.get('sources'))
+    assert all(previous_sources['rtl_sha256'].get(n)==h for n,h in unchanged_core.items())
     result=dict(timestamp_utc=datetime.now(timezone.utc).isoformat(),pass_photo_deployment=True,
                 project=str(project),bitstream_sha256=bit,resources=resources,timing_rows=rows,
                 image_display=display,matched_capture=capture,numerical_comparison=comparison,
@@ -66,7 +68,7 @@ def record(out):
                 parent_native_network_evidence_sha256=sha(baseline),
                 programming_log_sha256=sha(out/'program.log'),
                 report_sha256={n:sha(project/'outflow'/n) for n in ('encoder_board.map.rpt','encoder_board.timing.rpt')},
-                normalization='same-frame IN at residual points 5..22; other eight points fixed',
+                normalization=deployment['normalization'],
                 final_display='frozen network output; control=7; source selection=JTAG image')
     (out/'verification.json').write_text(json.dumps(result,indent=2)+'\n')
     (ROOT/'docs/analysis/cyclegan_video_image.json').write_text(json.dumps(result,indent=2)+'\n')

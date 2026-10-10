@@ -43,8 +43,12 @@ module generator_norm_coeff(
   .rfd(div_ready),.rdy(div_done),.div_by_zero(div_zero));
  // Preserve ties-to-even on the magnitude, then restore sign and saturate.
  wire [40:0] twice_remainder={remainder,1'b0};
- wire [63:0] rounded=quotient+((twice_remainder>{1'b0,root}) ||
-  ((twice_remainder=={1'b0,root}) && quotient[0]));
+ wire round_up=(twice_remainder>{1'b0,root}) ||
+  ((twice_remainder=={1'b0,root}) && quotient[0]);
+ // Any quotient above 65535 is already saturated. Carry only 16 bits into
+ // the final signed16 result instead of a 64-bit add/compare/negate chain.
+ wire [16:0] rounded={1'b0,quotient[15:0]}+round_up;
+ wire rounded_high=|quotient[63:16];
  wire [24:0] abs_sum=s[24] ? (~s+25'd1) : s;
  wire [15:0] abs_gamma=g[15] ? (~g+16'd1) : g;
  wire [15:0] abs_beta=be[15] ? (~be+16'd1) : be;
@@ -62,10 +66,10 @@ module generator_norm_coeff(
   endcase end
  endfunction
  function [15:0] saturated;
-  input [63:0] magnitude;input sign_bit;
+  input [16:0] magnitude;input sign_bit,high_bits;
   begin
-   if(sign_bit) saturated=magnitude>=32768 ? 16'h8000 : -magnitude[15:0];
-   else saturated=magnitude>32767 ? 16'h7fff : magnitude[15:0];
+   if(high_bits || |magnitude[16:15]) saturated=sign_bit ? 16'h8000 : 16'h7fff;
+   else saturated=sign_bit ? -magnitude[15:0] : magnitude[15:0];
   end
  endfunction
  assign busy=state!=IDLE;
@@ -124,12 +128,12 @@ module generator_norm_coeff(
      state<=state==DIV_A_WAIT ? ROUND_A : ROUND_B;
     end
    end
-   ROUND_A:begin a<=saturated(rounded,negative);state<=DIV_B_INIT;end
+   ROUND_A:begin a<=saturated(rounded,negative,rounded_high);state<=DIV_B_INIT;end
    DIV_B_INIT:begin
     dividend<=numerator_b<0 ? -numerator_b : numerator_b;negative<=numerator_b<0;
     state<=DIV_B_REQ;
    end
-   ROUND_B:begin b<=saturated(rounded,negative);done<=1;state<=IDLE;end
+   ROUND_B:begin b<=saturated(rounded,negative,rounded_high);done<=1;state<=IDLE;end
    default:begin fault<=1;done<=1;state<=IDLE;end
   endcase
  end

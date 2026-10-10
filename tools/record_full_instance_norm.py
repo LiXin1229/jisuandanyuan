@@ -31,7 +31,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--points',type=int,choices=(23,26),required=True)
     p.add_argument('--photo',type=Path,required=True);p.add_argument('--live',type=Path)
-    p.add_argument('--native',type=Path,default=ROOT/'build/instance_full_verified')
+    p.add_argument('--native',type=Path,default=ROOT/'build/instance_full_timing_verified')
     args=p.parse_args();out=args.photo.resolve()
     result=project_check(out,args.points)
     capture=read(out/'photo_pair/capture_report.json');comparison=read(out/'photo_pair/comparison.json')
@@ -42,9 +42,11 @@ def main():
     assert comparison['live_normalization_ids']==list(range(args.points))
     assert comparison['live_channels']==(688 if args.points==26 else 656)
     assert (out/'photo_pair/camera_original.rgbx').read_bytes()==(out/'photo_pair/reference/vectors/frame_rgbx.bin').read_bytes()
+    assert sha(out/'photo_pair/camera_original.rgbx')==display['input_rgbx_sha256']
+    assert sha(Path(display['image']))==display['image_sha256']
     metrics=display['styled_display']
     assert metrics['command_wait_cycles']==0 and metrics['prefix_mac_cycles']==4974864
-    assert metrics['input_checksum']==929158803 and metrics['output_status']==7
+    assert metrics['input_checksum']==comparison['input_checksum'] and metrics['output_status']==7
     result.update(points=args.points,live_channels=comparison['live_channels'],
                   photo_comparison=comparison,photo_display=display,
                   matched_capture=capture,compute_ms=metrics['compute_ms'],
@@ -61,6 +63,34 @@ def main():
             native[logname]=dict(sha256=sha(args.native/logname),rtl_sha256=common,
                                 pass_line=next(l.strip() for l in log.splitlines() if 'PASS stage4:' in l))
         result['native_simulations']=native
+        coeff_dir=ROOT/'build/instance_residual_verified'
+        coeff_stage=Path((coeff_dir/'coeff_path.txt').read_text(encoding='utf-8-sig').strip())
+        assert sha(coeff_stage/'mn_instance_norm_coeff.sv')==sha(ROOT/'rtl/mn_instance_norm_coeff.sv')
+        coeff_log=(coeff_dir/'coeff_edge.log').read_text()
+        assert 'PASS instance coefficient: 260 cases' in coeff_log and '** Fatal:' not in coeff_log
+        result['coefficient_edge_test']=dict(log_sha256=sha(coeff_dir/'coeff_edge.log'),cases=260,max_latency=248)
+        compatibility=ROOT/'build/instance_residual_compat_verified/residual_delay2.log'
+        if compatibility.exists():
+            text=compatibility.read_text()
+            assert 'PASS instance residual: coefficients=576 residual_values=345600' in text and '** Fatal:' not in text
+            result['residual_18_compatibility']=dict(sha256=sha(compatibility),
+                pass_line=next(l.strip() for l in text.splitlines() if 'PASS instance residual:' in l))
+        protocol=args.native/'video_protocol'
+        protocol_stage=Path((protocol/'unit_sim_path.txt').read_text(encoding='utf-8-sig').strip())
+        protocol_hashes={n:sha(protocol_stage/Path(n).name) for n in result['source_manifest']['rtl_sha256'] if n.startswith('video/')}
+        assert all(h==result['source_manifest']['rtl_sha256'][n] for n,h in protocol_hashes.items())
+        result['video_protocol']={}
+        for name,marker in [('image_sim.log','PASS camera fixed image:'),('board_sim.log','PASS camera board protocol:')]:
+            text=(protocol/name).read_text()
+            assert marker in text and '** Fatal:' not in text
+            result['video_protocol'][name]=dict(sha256=sha(protocol/name),pass_line=next(l.strip() for l in text.splitlines() if marker in l))
+        result['video_protocol']['rtl_sha256']=protocol_hashes
+        if (out/'photo_pair/previous_full26_comparison.json').exists():
+            previous=read(out/'photo_pair/previous_full26_comparison.json')
+            assert previous['mismatches']==0 and previous['rgb_values']==230400
+            assert sha(Path(previous['previous_full26_image']))==previous['previous_full26_sha256']
+            assert sha(out/'photo_pair/fpga_styled.png')==previous['fpga_image_sha256']
+            result['previous_full26_image_comparison']=previous
         assert args.live,'Full deployment also requires the live camera build'
         live=project_check(args.live.resolve(),26)
         live['streams']={name:read(args.live/name) for name in ('stream_style.json','stream_original.json','stream_restore.json')}

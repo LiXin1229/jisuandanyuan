@@ -22,16 +22,14 @@ try {
     Write-Output "VIDEO_FLOW_PASS $flow"
    }
   } finally {Pop-Location}
-  if($HostImage) {
-   $localVideoStage=Join-Path (Get-Location) ($OutputDir+'/project')
-   New-Item -ItemType Directory -Force -Path $localVideoStage | Out-Null
-   Copy-Item -Path "$videoStage/*" -Destination $localVideoStage -Recurse -Force
-   $videoStage=$localVideoStage
-   Set-Content -LiteralPath "$OutputDir/staging_path.txt" -Value $videoStage
-  }
+  $localVideoStage=Join-Path (Get-Location) ($OutputDir+'/project')
+  New-Item -ItemType Directory -Force -Path $localVideoStage | Out-Null
+  Copy-Item -Path "$videoStage/*" -Destination $localVideoStage -Recurse -Force
+  $videoStage=$localVideoStage
+  Set-Content -LiteralPath "$OutputDir/staging_path.txt" -Value $videoStage
  }
- $sourceGate='import hashlib,json,pathlib,sys; r=pathlib.Path.cwd(); p=pathlib.Path(sys.argv[1]); m=json.loads((p/"source_manifest.json").read_text()); sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest(); assert all(sha(r/"rtl"/n)==h for n,h in m["rtl_sha256"].items()),"Stale video RTL"; assert all(sha(r/"board/video"/n)==h for n,h in m["board_sha256"].items()),"Stale board templates"'
- & $Python -c $sourceGate $videoStage
+ $sourceGate='import hashlib,json,pathlib,sys; r=pathlib.Path.cwd(); p=pathlib.Path(sys.argv[1]); m=json.loads((p/"source_manifest.json").read_text()); sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest(); assert m["video_contract"]["normalization"]["live_points"]==int(sys.argv[2]),"Wrong IN point count"; assert all(sha(r/"rtl"/n)==h for n,h in m["rtl_sha256"].items()),"Stale video RTL"; assert all(sha(r/"board/video"/n)==h for n,h in m["board_sha256"].items()),"Stale board templates"'
+ & $Python -c $sourceGate $videoStage $NormPoints
  if($LASTEXITCODE -ne 0) {throw 'Video source manifest mismatch'}
  if($HostImage) {
   $photoManifest=Get-Content -LiteralPath (Join-Path $videoStage 'source_manifest.json') -Raw | ConvertFrom-Json
