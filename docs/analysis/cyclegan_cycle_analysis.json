@@ -1,0 +1,269 @@
+{
+  "basis": "Deployed RTL, measured unit instruction latencies and previously verified board counters; no new board test.",
+  "compute_mhz": 171.42857142857142,
+  "tile_pixels": 100,
+  "evidence_path": "C:/Users/Administrator/Desktop/计算单元/docs/analysis/cyclegan_video_schedule_optimization.json",
+  "evidence_sha256": "231bb8d77a229c30605b33cab244124e7528c9fb2ad06cdf4d5ab5282e0680c4",
+  "bitstream_sha256": "1c5350211a835ad7a1498b97b60efd5b1c6ca6ff06f8c05d48212d6e334b862f",
+  "rtl_sha256": {
+    "mobilenet_unit.sv": "e6f8113332608e92f30e76bbd664cc7d4b6c1747dc713f88b3dbb299b30147dd",
+    "mn_instruction_fifo.sv": "40b7810b326af113384f45def9e63d65409256f616a1527cdfa87cef1ff58992",
+    "mn_pe_array.sv": "82d966cbc024758d040291e7441fb156494e4862f2188d14aa9c051c36eaec69",
+    "mn_tanh.sv": "c0d92dc594e613ef65155b82209cc3bd67c613d29729258a942093833c3c339b",
+    "cyclegan_encoder.sv": "8b94a37c650625f407db4a80d410e11deca01479d0eb52cf6e0655310f023556",
+    "cyclegan_residual_scheduler.sv": "57b2094dab8ac05722213a07fc7b3f6a61e0530a74bbdd186d489598ebf5aeb4",
+    "cyclegan_decoder_scheduler.sv": "d6ef3b804f49e42c61a05baee45869b31249fbda8b8f3264b04466c1bed43398"
+  },
+  "assumptions": [
+    "All production instructions process full 10x10 tiles.",
+    "Reflect padding costs nine extra clocks per repaired side.",
+    "One IDLE clock per command is included as an amortized frame cost.",
+    "Ideal excludes DMA, packing port contention, slot ownership, scheduler drains and video synchronization.",
+    "PE-valid clocks include rounding constants, normalization and residual addition; they are derived, not measured counters.",
+    "Data-wait counters can overlap execution of queued instructions and are not additive idle clocks."
+  ],
+  "stages": {
+    "encoder_1": {
+      "commands": 14592,
+      "busy_cycles": 258000,
+      "pe_valid_cycles": 59904,
+      "switch_cycles": 14592,
+      "ideal_cycles": 272592,
+      "busy_ms": 1.5050000000000001,
+      "ideal_ms": 1.59012
+    },
+    "encoder_2": {
+      "commands": 9216,
+      "busy_cycles": 178176,
+      "pe_valid_cycles": 52224,
+      "switch_cycles": 9216,
+      "ideal_cycles": 187392,
+      "busy_ms": 1.03936,
+      "ideal_ms": 1.09312
+    },
+    "encoder_3": {
+      "commands": 4608,
+      "busy_cycles": 101376,
+      "pe_valid_cycles": 38400,
+      "switch_cycles": 4608,
+      "ideal_cycles": 105984,
+      "busy_ms": 0.59136,
+      "ideal_ms": 0.61824
+    },
+    "residual_9": {
+      "commands": 17280,
+      "busy_cycles": 425088,
+      "pe_valid_cycles": 169344,
+      "switch_cycles": 17280,
+      "ideal_cycles": 442368,
+      "busy_ms": 2.47968,
+      "ideal_ms": 2.58048
+    },
+    "transpose_1": {
+      "commands": 25344,
+      "busy_cycles": 530880,
+      "pe_valid_cycles": 57600,
+      "switch_cycles": 25344,
+      "ideal_cycles": 556224,
+      "busy_ms": 3.0968,
+      "ideal_ms": 3.24464
+    },
+    "transpose_2": {
+      "commands": 26112,
+      "busy_cycles": 539520,
+      "pe_valid_cycles": 59904,
+      "switch_cycles": 26112,
+      "ideal_cycles": 565632,
+      "busy_ms": 3.1472,
+      "ideal_ms": 3.2995200000000002
+    },
+    "transpose_3": {
+      "commands": 55296,
+      "busy_cycles": 1113600,
+      "pe_valid_cycles": 129024,
+      "switch_cycles": 55296,
+      "ideal_cycles": 1168896,
+      "busy_ms": 6.496,
+      "ideal_ms": 6.818560000000001
+    },
+    "output_7x7": {
+      "commands": 18432,
+      "busy_cycles": 1828224,
+      "pe_valid_cycles": 903168,
+      "switch_cycles": 18432,
+      "ideal_cycles": 1846656,
+      "busy_ms": 10.66464,
+      "ideal_ms": 10.772160000000001
+    }
+  },
+  "four_phases": {
+    "encoder": {
+      "commands": 28416,
+      "busy_cycles": 537552,
+      "pe_valid_cycles": 150528,
+      "switch_cycles": 28416,
+      "ideal_cycles": 565968,
+      "busy_ms": 3.13572,
+      "ideal_ms": 3.30148
+    },
+    "residual": {
+      "commands": 17280,
+      "busy_cycles": 425088,
+      "pe_valid_cycles": 169344,
+      "switch_cycles": 17280,
+      "ideal_cycles": 442368,
+      "busy_ms": 2.47968,
+      "ideal_ms": 2.58048
+    },
+    "transpose": {
+      "commands": 106752,
+      "busy_cycles": 2184000,
+      "pe_valid_cycles": 246528,
+      "switch_cycles": 106752,
+      "ideal_cycles": 2290752,
+      "busy_ms": 12.74,
+      "ideal_ms": 13.362720000000001
+    },
+    "output": {
+      "commands": 18432,
+      "busy_cycles": 1828224,
+      "pe_valid_cycles": 903168,
+      "switch_cycles": 18432,
+      "ideal_cycles": 1846656,
+      "busy_ms": 10.66464,
+      "ideal_ms": 10.772160000000001
+    }
+  },
+  "operations": {
+    "DW_3x3": {
+      "commands": 8064,
+      "busy_cycles": 422352,
+      "pe_valid_cycles": 80640,
+      "switch_cycles": 8064,
+      "ideal_cycles": 430416,
+      "busy_ms": 2.46372,
+      "ideal_ms": 2.5107600000000003
+    },
+    "PW": {
+      "commands": 14208,
+      "busy_cycles": 306048,
+      "pe_valid_cycles": 192384,
+      "switch_cycles": 14208,
+      "ideal_cycles": 320256,
+      "busy_ms": 1.78528,
+      "ideal_ms": 1.86816
+    },
+    "NORM": {
+      "commands": 28416,
+      "busy_cycles": 284160,
+      "pe_valid_cycles": 56832,
+      "switch_cycles": 28416,
+      "ideal_cycles": 312576,
+      "busy_ms": 1.6576000000000002,
+      "ideal_ms": 1.82336
+    },
+    "ADD": {
+      "commands": 3456,
+      "busy_cycles": 34560,
+      "pe_valid_cycles": 6912,
+      "switch_cycles": 3456,
+      "ideal_cycles": 38016,
+      "busy_ms": 0.2016,
+      "ideal_ms": 0.22176
+    },
+    "CONV_1x1": {
+      "commands": 24576,
+      "busy_cycles": 200832,
+      "pe_valid_cycles": 26688,
+      "switch_cycles": 24576,
+      "ideal_cycles": 225408,
+      "busy_ms": 1.1715200000000001,
+      "ideal_ms": 1.31488
+    },
+    "CONV_1x2": {
+      "commands": 24576,
+      "busy_cycles": 567360,
+      "pe_valid_cycles": 51264,
+      "switch_cycles": 24576,
+      "ideal_cycles": 591936,
+      "busy_ms": 3.3096,
+      "ideal_ms": 3.45296
+    },
+    "CONV_2x1": {
+      "commands": 24576,
+      "busy_cycles": 567360,
+      "pe_valid_cycles": 51264,
+      "switch_cycles": 24576,
+      "ideal_cycles": 591936,
+      "busy_ms": 3.3096,
+      "ideal_ms": 3.45296
+    },
+    "CONV_2x2": {
+      "commands": 24576,
+      "busy_cycles": 763968,
+      "pe_valid_cycles": 100416,
+      "switch_cycles": 24576,
+      "ideal_cycles": 788544,
+      "busy_ms": 4.45648,
+      "ideal_ms": 4.59984
+    },
+    "CONV_7x7": {
+      "commands": 18432,
+      "busy_cycles": 1828224,
+      "pe_valid_cycles": 903168,
+      "switch_cycles": 18432,
+      "ideal_cycles": 1846656,
+      "busy_ms": 10.66464,
+      "ideal_ms": 10.772160000000001
+    }
+  },
+  "frame": {
+    "commands": 170880,
+    "busy_cycles": 4974864,
+    "pe_valid_cycles": 1469568,
+    "switch_cycles": 170880,
+    "ideal_cycles": 5145744,
+    "busy_ms": 29.02004,
+    "ideal_ms": 30.016840000000002,
+    "ideal_fps_ceiling": 33.31463271950012,
+    "pe_valid_ms_equivalent": 8.57248
+  },
+  "physical_evidence": [
+    {
+      "display_mode": "style",
+      "evidence_timestamp_utc": "2026-10-10T01:44:47.757751+00:00",
+      "sample_elapsed_cycles": 6127039,
+      "sample_elapsed_ms": 35.741060833333336,
+      "sample_busy_cycles": 4974864,
+      "sample_command_wait_cycles": 0,
+      "sample_data_wait_cycles": 819187,
+      "sample_extra_cycles_above_lower_bound": 981295,
+      "sample_extra_ms_above_lower_bound": 5.724220833333334,
+      "sample_core_busy_percent": 81.19523965817747,
+      "sample_derived_pe_valid_percent": 23.984962393743537,
+      "measured_processed_fps": 27.559830603056948,
+      "measured_frame_period_ms": 36.284693269815655
+    },
+    {
+      "display_mode": "original",
+      "evidence_timestamp_utc": "2026-10-10T01:45:56.910657+00:00",
+      "sample_elapsed_cycles": 5855367,
+      "sample_elapsed_ms": 34.156307500000004,
+      "sample_busy_cycles": 4974864,
+      "sample_command_wait_cycles": 0,
+      "sample_data_wait_cycles": 514434,
+      "sample_extra_cycles_above_lower_bound": 709623,
+      "sample_extra_ms_above_lower_bound": 4.1394675,
+      "sample_core_busy_percent": 84.96246264324678,
+      "sample_derived_pe_valid_percent": 25.097794894837506,
+      "measured_processed_fps": 28.783353572444796,
+      "measured_frame_period_ms": 34.742303306774204
+    }
+  ],
+  "checks": {
+    "instruction_count": true,
+    "busy_cycles_match_board": true,
+    "resident_residual_elapsed_cycles_match_board": true,
+    "rtl_hashes_match_verified_deployment": true
+  }
+}
