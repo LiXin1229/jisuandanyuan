@@ -3,6 +3,7 @@
 // Each channel is twelve 10x10 tiles; coefficient work overlaps later channels.
 module mn_instance_norm(
  input wire clk,rstn,clear,input wire [4:0] point,
+ input wire [9:0] tiles_per_channel,input wire [16:0] sample_count,
  input wire tile_valid,input wire [799:0] tile_data,
  output wire sample_idle,output reg fault,
  input wire [4:0] query_channel,output wire coefficient_ready,
@@ -10,7 +11,7 @@ module mn_instance_norm(
 );
  reg scanning;
  reg [4:0] group_index,channel;
- reg [3:0] tile_index;
+ reg [9:0] tile_index;
  reg signed [24:0] total;
  reg [30:0] squares;
  wire signed [7:0] pixel[0:3];
@@ -39,12 +40,14 @@ module mn_instance_norm(
  reg [30:0] request_squares;
  reg signed [15:0] gamma,beta;
  wire [15:0] gamma_data;
- wire [10:0] gamma_addr={point,request_channel,1'b0}+(request_state==BETA);
+ wire [10:0] gamma_base=point==0 ? 0 : point==1 ? 16 : point==2 ? 32 : point==3 ? 64 : point==4 ? 96 :
+  point<23 ? 160+((point-5)<<6) : point==23 ? 1312 : point==24 ? 1344 : 1360;
+ wire [10:0] gamma_addr=gamma_base+{5'd0,request_channel,1'b0}+(request_state==BETA);
  mn_instance_norm_gamma gamma_rom(.clk(clk),.rd_en(request_state==GAMMA || request_state==BETA),.addr(gamma_addr),.data(gamma_data));
  wire coeff_busy,coeff_done,coeff_fault;
  wire signed [15:0] a,b;
  generator_norm_coeff coefficient(.clk(clk),.rstn(rstn && !clear),.start(request_state==LATCH),
-  .count(17'd1200),.total(request_total),.squares(request_squares),.gamma(gamma),.beta(beta),
+  .count(sample_count),.total(request_total),.squares(request_squares),.gamma(gamma),.beta(beta),
   .busy(coeff_busy),.done(coeff_done),.fault(coeff_fault),.a(a),.b(b));
  wire write_a=request_state==WAIT && coeff_done && !coeff_fault;
  wire write_b=request_state==WRITE_B;
@@ -70,7 +73,7 @@ module mn_instance_norm(
    if(square_valid) begin
     squares<=next_squares;
     if(square_last) begin
-     if(tile_index==11) begin
+     if(tile_index==tiles_per_channel-1'b1) begin
       if(request_state!=FREE) fault<=1;
       request_channel<=channel;request_total<=total;request_squares<=next_squares;
       request_state<=GAMMA;channel<=channel+1'b1;tile_index<=0;total<=0;squares<=0;

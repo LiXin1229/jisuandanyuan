@@ -13,7 +13,7 @@ SOURCES = ['mn_cache.sv','mn_param_ram.sv','mn_instruction_fifo.sv','mn_dw_buffe
            'mn_input_mux.sv','mn_pe_array.sv','mn_compact.sv','mn_postprocess.sv',
            'mn_model_rom.sv','mn_encoder_rom.sv','mn_tanh.sv','mobilenet_unit.sv',
            'cyclegan_rgb_loader.sv','cyclegan_encoder.sv','cyclegan_ddr_read_bridge.sv',
-           'mn_instance_norm.sv','mn_instance_norm_coeff.sv','mn_instance_norm_gamma.sv',
+           'cyclegan_encoder_instance_scheduler.sv','cyclegan_instance_pass.sv','mn_instance_norm.sv','mn_instance_norm_coeff.sv','mn_instance_norm_gamma.sv',
            'cyclegan_residual_instance_scheduler.sv',
            'ip/norm_sqrt80/norm_sqrt80.v','ip/norm_div64_40/norm_div64_40.sv']
 

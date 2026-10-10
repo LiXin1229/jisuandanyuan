@@ -23,7 +23,7 @@ def main():
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)
     manifest=json.loads((args.reference/'params_manifest.json').read_text())
     assert manifest['reference_image_sha256']==sha(args.image),'Stale image reference'
-    assert manifest['live_normalization_ids']==list(range(5,23))
+    assert manifest['live_normalization_ids'] in (list(range(5,23)),list(range(23)),list(range(26)))
     raw=(args.reference/'vectors/frame_rgbx.bin').read_bytes()
     assert len(raw)==307200 and not any(raw[3::4])
     stream=bytes(((raw[((ty*10+row)*320+tx*10+pixel)*4+channel]-124)>>3)&255

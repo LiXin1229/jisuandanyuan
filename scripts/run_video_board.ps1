@@ -1,4 +1,4 @@
-param([string]$EfinityRoot='D:\Efinity\2026.1',[switch]$ReuseBuild,[switch]$Program,[switch]$HostImage,
+param([int]$NormPoints=26,[string]$EfinityRoot='D:\Efinity\2026.1',[switch]$ReuseBuild,[switch]$Program,[switch]$HostImage,
  [string]$Python='C:\Users\Administrator\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe',
  [string]$UsbUrl='ftdi://0x0403:0x6014:3:7/1',[string]$OutputDir='build/video_verified')
 $ErrorActionPreference='Stop'
@@ -8,7 +8,7 @@ try {
  if($ReuseBuild) {$videoStage=(Get-Content -LiteralPath "$OutputDir/staging_path.txt" -Raw).Trim()}
  else {
   $videoStage=Join-Path $env:TEMP ('cyclegan_video_'+[guid]::NewGuid().ToString('N'))
-  $prepareArgs=@('tools/prepare_video_deployment.py','--board',$videoStage)
+  $prepareArgs=@('tools/prepare_video_deployment.py','--board',$videoStage,'--norm-points',$NormPoints)
   if($HostImage) {$prepareArgs+='--host-image'}
   & (Join-Path $EfinityRoot 'bin/python3.bat') @prepareArgs > "$OutputDir/prepare_board.log" 2>&1
   if(!(Select-String -LiteralPath "$OutputDir/prepare_board.log" -Pattern '^VIDEO_BOARD_READY' -Quiet)) {throw 'Video project preparation failed'}

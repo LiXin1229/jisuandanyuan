@@ -1,16 +1,16 @@
-"""Residual-only same-frame IN assets; fixed encoder/decoder references are retained."""
+"""Same-frame IN assets, with one shared 3-BRAM gamma/beta ROM for all 26 points."""
 from pathlib import Path
 import json,shutil,zlib
 import numpy as np
 import prepare_encoder_deployment as base
 ROOT=base.ROOT
 
-def assets():
-    model=ROOT/'build/instance_residual_model'
+def assets(model=None,out=None):
+    model=model or ROOT/'build/instance_residual_model'
     raw=(model/'generator_norm_gamma.mem').read_text().split()
-    words=[int(v,16) for v in raw[160:1312]]
-    assert len(words)==1152
-    text='// Raw Q8.8 gamma,beta for eighteen residual IN points; 3 BRAM.\n'
+    words=[int(v,16) for v in raw[:1376]]
+    assert len(words)==1376
+    text='// Raw Q8.8 gamma,beta for all 26 IN points; 3 BRAM.\n'
     text+='module mn_instance_norm_gamma(input wire clk,rd_en,input wire [10:0] addr,output wire [15:0] data);\nwire [15:0] q[0:2];\n'
     for bank in range(3):
         image=sum(v<<(16*i) for i,v in enumerate(words[bank*512:(bank+1)*512]))
@@ -20,7 +20,7 @@ def assets():
         text+=".WCLK(clk),.WCLKE(1'b0),.WADDREN(1'b0),.WE(2'b00),.WADDR(9'd0),.WDATA(16'd0));\n"
     text+='assign data=q[0]|q[1]|q[2];\nendmodule\n'
     (ROOT/'rtl/mn_instance_norm_gamma.sv').write_text(text,encoding='ascii')
-    out=ROOT/'build/instance_residual_verified'
+    out=out or ROOT/'build/instance_residual_verified'
     for suffix in ('','_inverted'):
         dest=out/('vectors'+suffix);dest.mkdir(parents=True,exist_ok=True)
         source=model/('vectors'+suffix)
@@ -34,8 +34,11 @@ def assets():
         stream=((rgb.astype(np.int16)-124)>>3).astype(np.int8).reshape(24,10,32,10,3).transpose(0,2,1,4,3).tobytes()
         (dest/'input_crc.mem').write_text(f'{zlib.crc32(stream):08x}\n')
         coefficients=json.loads((source/'live_normalization.json').read_text())['coefficients']
-        assert len(coefficients)==18 and [v['id'] for v in coefficients]==list(range(5,23))
+        assert len(coefficients) in (18,23,26)
         (dest/'coefficients.mem').write_text(''.join(f'{a&65535:04x}\n{b&65535:04x}\n' for r in coefficients for a,b in zip(r['a'],r['b'])))
-    print('INSTANCE_RESIDUAL_ASSETS_PASS 18 points, 576 channels, same-frame reference',flush=True)
+    print(f'INSTANCE_ASSETS_PASS {len(coefficients)} points, {sum(len(v["a"]) for v in coefficients)} channels, same-frame reference',flush=True)
 
-if __name__=='__main__':assets()
+if __name__=='__main__':
+    import argparse
+    cli=argparse.ArgumentParser();cli.add_argument('--model',type=Path);cli.add_argument('--output',type=Path)
+    args=cli.parse_args();assets(args.model,args.output)

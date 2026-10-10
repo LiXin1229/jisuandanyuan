@@ -2,7 +2,7 @@
 // Three stride-2 transposed convolutions. Four CONV phases use the existing
 // accumulator, then the original NORM/ReLU quantization. Two phase slots let
 // cache interleaving and DDR writes overlap the next output channel.
-module cyclegan_decoder_scheduler #(parameter OUTPUT_ENABLE=0)(
+module cyclegan_decoder_scheduler #(parameter OUTPUT_ENABLE=0,INSTANCE_NORM=0)(
  input wire clk,rstn,frame_start,start,pause_each_layer,resume,
  output reg [127:0] instruction,output wire instruction_valid,input wire instruction_ready,
  input wire core_busy,memory_ready,input wire [2:0] queued,
@@ -15,15 +15,23 @@ module cyclegan_decoder_scheduler #(parameter OUTPUT_ENABLE=0)(
  output wire cache_wr,input wire cache_ready,output wire [10:0] cache_waddr,
  output wire [799:0] cache_wdata,output wire [39:0] cache_we,
  output wire cache_rd,input wire cache_read_ready,output wire [10:0] cache_raddr,input wire cache_rvalid,input wire [799:0] cache_rdata,
- output wire write_valid,input wire write_ready,output wire [31:0] write_addr,output wire [399:0] write_data
+ output wire write_valid,input wire write_ready,output wire [31:0] write_addr,output wire [399:0] write_data,
+ output wire pass_start,input wire pass_done,output wire [4:0] pass_point,
+ output wire [9:0] pass_tiles,output wire [5:0] pass_channels,pass_width,output wire [31:0] pass_base
 );
- localparam IDLE=0,RUN=1,DRAIN=2,PAUSE=3,NEXT=4;
+ localparam IDLE=0,RUN=1,DRAIN=2,PAUSE=3,NEXT=4,NSTART=5,NWAIT=6;
  reg [2:0] state;reg [1:0] layer,phase;
  reg [4:0] ch,co,x,y;
  reg norm;
  reg [1:0] owned,ready_slots;
  reg [4:0] consumed_rows;
  wire output_mode=OUTPUT_ENABLE && layer==3;
+ assign pass_start=INSTANCE_NORM && state==NSTART;
+ assign pass_point=23+layer;
+ assign pass_tiles=layer==0 ? 48 : layer==1 ? 192 : 768;
+ assign pass_channels=layer==0 ? 16 : 8;
+ assign pass_width=layer==0 ? 8 : layer==1 ? 16 : 32;
+ assign pass_base=layer==0 ? 32'h00300000 : layer==1 ? 32'h00400000 : 32'h00500000;
  wire [5:0] cin=layer==0 ? 32 : layer==1 ? 16 : 8;
  wire [4:0] cout=output_mode ? 3 : layer==0 ? 16 : 8;
  wire [5:0] width=output_mode ? 32 : layer==0 ? 4 : layer==1 ? 8 : 16;
@@ -99,7 +107,7 @@ module cyclegan_decoder_scheduler #(parameter OUTPUT_ENABLE=0)(
  // Encoder pooled outputs also occupy 1424..1431. Shared-unit writeback
  // events belong to this scheduler only while its stage is active.
  wire phase_complete=(state==RUN || state==DRAIN) && writeback_valid && writeback_addr>=1424 && writeback_addr<1432 &&
-                       (output_mode ? writeback_opcode==`MN_OP_CONV && writeback_addr[1:0]==0 : writeback_opcode==`MN_OP_NORM && writeback_addr[1:0]==3);
+                       (output_mode ? writeback_opcode==`MN_OP_CONV && writeback_addr[1:0]==0 : writeback_opcode==(INSTANCE_NORM ? `MN_OP_CONV : `MN_OP_NORM) && writeback_addr[1:0]==3);
  wire [3:0] source_row=(quad[1] ? 4'd5 : 4'd0)+(row>>1);
  wire [6:0] source_pixel=(source_row>=5 ? 7'd50 : 0)+(quad[0] ? 7'd25 : 0)+(source_row>=5 ? source_row-5 : source_row)*7'd5;
  wire [39:0] selected_pixels=cache_rdata[source_pixel*8+:40];
@@ -150,7 +158,7 @@ module cyclegan_decoder_scheduler #(parameter OUTPUT_ENABLE=0)(
    slot_co[0]<=0;slot_co[1]<=0;slot_x[0]<=0;slot_x[1]<=0;slot_y[0]<=0;slot_y[1]<=0;
    exec_co<=0;exec_x<=0;exec_y<=0;layers_completed<=0;output_completed<=0;cycles<=0;layer_cycles<=0;active_layer_cycles<=0;command_wait_cycles<=0;data_wait_cycles<=0;eligible_previous<=0;
   end else begin
-   if(state==RUN || state==DRAIN) begin if(!output_mode) cycles<=cycles+1;active_layer_cycles<=active_layer_cycles+1;end
+   if(state==RUN || state==DRAIN || state==NSTART || state==NWAIT) begin if(!output_mode) cycles<=cycles+1;active_layer_cycles<=active_layer_cycles+1;end
    // Count empty instruction supply only while useful work is eligible.
    // The first FIFO refill after a data/ownership stall belongs to that
    // dependency. Count instruction starvation only after eligibility persists.
@@ -201,7 +209,7 @@ module cyclegan_decoder_scheduler #(parameter OUTPUT_ENABLE=0)(
     RUN:if(instruction_valid && instruction_ready) begin
      if(starting_slot) owned[job_slot]<=1;
      if(!norm && ch!=cin-1) ch<=ch+1;
-     else if(!norm && !output_mode) norm<=1;
+     else if(!norm && !output_mode && !INSTANCE_NORM) norm<=1;
      else begin
       norm<=0;ch<=0;
       if(!output_mode && phase!=3) phase<=phase+1;
@@ -213,9 +221,14 @@ module cyclegan_decoder_scheduler #(parameter OUTPUT_ENABLE=0)(
      end
     end
     DRAIN:if(!core_busy && queued==0 && owned==0 && pack_state==P_IDLE && write_ready) begin
-     if(output_mode) output_completed<=1;else layers_completed<=layers_completed+1;
-     layer_cycles<=active_layer_cycles+1;state<=pause_each_layer ? PAUSE : NEXT;
+     if(INSTANCE_NORM && !output_mode) state<=NSTART;
+     else begin
+      if(output_mode) output_completed<=1;else layers_completed<=layers_completed+1;
+      layer_cycles<=active_layer_cycles+1;state<=pause_each_layer ? PAUSE : NEXT;
+     end
     end
+    NSTART:state<=NWAIT;
+    NWAIT:if(pass_done) begin layers_completed<=layers_completed+1;layer_cycles<=active_layer_cycles+1;state<=pause_each_layer ? PAUSE : NEXT;end
     PAUSE:if(resume) state<=NEXT;
     NEXT:if(layer==(OUTPUT_ENABLE ? 3 : 2)) begin state<=IDLE;done<=1;end
      else begin

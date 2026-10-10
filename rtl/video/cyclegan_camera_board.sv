@@ -2,7 +2,7 @@
 // Ti60 DDR + shared CycleGAN compute core + official Efinity JTAG VIO.
 // command[31]=toggle, [30:28]=3 control,4 quality,5 metric,6 DDR read64.
 // HOST_IMAGE additionally enables 1 frame begin and 2 RGBx data64.
-module cyclegan_camera_board #(parameter SIM_CAMERA=0,HOST_IMAGE=0) (
+module cyclegan_camera_board #(parameter SIM_CAMERA=0,HOST_IMAGE=0,INSTANCE_NORM_POINTS=26) (
  input wire clk_video,clk_video_5x,clk_video_fb,video_pll_lock,
  output wire video_pll_rstn_o,
  output wire hdmi_txc_oe,hdmi_txd0_oe,hdmi_txd1_oe,hdmi_txd2_oe,
@@ -273,7 +273,7 @@ module cyclegan_camera_board #(parameter SIM_CAMERA=0,HOST_IMAGE=0) (
   .rvalid(vv),.rready(vready),.rdata(vdata),.rlast(vlast),.rresp(rresp),
   .txc(hdmi_txc_o),.txd0(hdmi_txd0_o),.txd1(hdmi_txd1_o),.txd2(hdmi_txd2_o),
   .loaded_lines(video_lines),.fault(video_fault),.displayed_frames(video_frames),.underflows(video_underflows),.pixel_sum(video_sum));
- cyclegan_encoder #(.RESIDUAL_ENABLE(1),.DECODER_ENABLE(1),.OUTPUT_ENABLE(1),.RESIDUAL_INSTANCE_NORM(1)) u_core(
+ cyclegan_encoder #(.RESIDUAL_ENABLE(1),.DECODER_ENABLE(1),.OUTPUT_ENABLE(1),.RESIDUAL_INSTANCE_NORM(1),.FULL_INSTANCE_NORM(INSTANCE_NORM_POINTS==26 ? 2 : INSTANCE_NORM_POINTS==23 ? 1 : 0)) u_core(
   .clk(clk_compute),.rstn(crstn),.start(core_start),.frame_base(read_base),
   .busy(core_busy),.done(core_done),.fault(network_fault),.cycles(cycles),.mac_cycles(mac_cycles),
   .first_output_cycle(first_cycle),.req_valid(req_valid),.req_ready(req_ready),.req_addr(req_addr),

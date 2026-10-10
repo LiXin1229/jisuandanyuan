@@ -48,11 +48,11 @@ module tb_cyclegan_residual_instance;
   if(dut.g_instance_residual.scheduler.outstanding>5) $fatal(1,"Residual outstanding overflow/underflow");
   if(dut.state==dut.RUN && dut.outstanding>5) $fatal(1,"Encoder outstanding overflow/underflow");
   if(dut.g_instance_residual.scheduler.active_block_cycles==131071 || residual_cycles>1048575)
-   $fatal(1,"Instance residual counter bound exceeded state=%0d phase=%0d ch=%0d outstanding=%0d sample_idle=%0d ready=%h coeff_state=%0d",dut.g_instance_residual.scheduler.state,dut.g_instance_residual.scheduler.phase,dut.g_instance_residual.scheduler.ch,dut.g_instance_residual.scheduler.outstanding,dut.g_instance_residual.sample_idle,dut.g_instance_residual.normalization.ready_channels,dut.g_instance_residual.normalization.request_state);
-  if(dut.g_instance_residual.normalization.write_a) begin
-   point_index=dut.g_instance_residual.scheduler.norm_point*64+dut.g_instance_residual.normalization.request_channel*2;
-   if(dut.g_instance_residual.normalization.a!==gold_coeff[point_index] || dut.g_instance_residual.normalization.b!==gold_coeff[point_index+1])
-    $fatal(1,"IN coefficient mismatch point=%0d channel=%0d got=%h/%h expected=%h/%h sum=%0d squares=%0d",point_index/64,(point_index%64)/2,dut.g_instance_residual.normalization.a,dut.g_instance_residual.normalization.b,gold_coeff[point_index],gold_coeff[point_index+1],dut.g_instance_residual.normalization.request_total,dut.g_instance_residual.normalization.request_squares);
+   $fatal(1,"Instance residual counter bound exceeded state=%0d phase=%0d ch=%0d outstanding=%0d sample_idle=%0d ready=%h coeff_state=%0d",dut.g_instance_residual.scheduler.state,dut.g_instance_residual.scheduler.phase,dut.g_instance_residual.scheduler.ch,dut.g_instance_residual.scheduler.outstanding,dut.sample_idle,dut.g_normalization.normalization.ready_channels,dut.g_normalization.normalization.request_state);
+  if(dut.g_normalization.normalization.write_a) begin
+   point_index=dut.g_instance_residual.scheduler.norm_point*64+dut.g_normalization.normalization.request_channel*2;
+   if(dut.g_normalization.normalization.a!==gold_coeff[point_index] || dut.g_normalization.normalization.b!==gold_coeff[point_index+1])
+    $fatal(1,"IN coefficient mismatch point=%0d channel=%0d got=%h/%h expected=%h/%h sum=%0d squares=%0d",point_index/64,(point_index%64)/2,dut.g_normalization.normalization.a,dut.g_normalization.normalization.b,gold_coeff[point_index],gold_coeff[point_index+1],dut.g_normalization.normalization.request_total,dut.g_normalization.normalization.request_squares);
    coefficient_checks=coefficient_checks+1;
   end
   if(dut.state==dut.RUN) begin

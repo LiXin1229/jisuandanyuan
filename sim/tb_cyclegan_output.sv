@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 // Real compute RTL, both CDC bridges and randomized DDR backpressure.
 // Full RGB-to-RGB integration, or a focused output test seeded from DDR.
-module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INSTANCE_NORM=0);
+module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INSTANCE_NORM=0,FULL_INSTANCE_NORM=0);
  reg clk=0,dclk=0;always #3.333 clk=~clk;always #5.208 dclk=~dclk;
  reg rstn=0,start=0,seed_wr=0;reg [10:0] seed_addr=0;reg [799:0] seed_data=0;
  wire [127:0] instruction;wire instruction_valid,instruction_ready,core_busy,memory_ready;wire [2:0] queued;
@@ -17,6 +17,8 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
  wire arvalid,arready,rready;wire [31:0] araddr;wire [7:0] arlen;
  reg rvalid=0,rlast=0;reg [127:0] rdata=0;
  reg [127:0] memory[0:411647];reg [799:0] seed[0:383],gold1[0:767],gold2[0:1535],gold3[0:6143],gold4[0:2303];reg [31:0] expected_crc[0:0];
+ reg [15:0] gold_coeff[0:1375];reg [799:0] gold_enc0[0:1535],gold_enc1[0:767],gold_enc2[0:383];
+ integer coefficient_checks=0,encoder_checks=0,ci,eq,ei;
  integer ticks=0,dticks=0,commands=0,halves=0,checks=0,overlap=0,reads=0;
  integer read_address=0,read_beat=0,read_len=0,write_address=0,write_beat=0,write_len=0;
  integer read_delay=0,bdelay=0,ddr_delay=2,layer,i,j,k,index,region,half,values=0;
@@ -47,12 +49,31 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
  assign decoder_loaded=scheduler.loaded_rows;assign slot_owned=scheduler.owned;assign slot_ready=scheduler.ready_slots;assign pack_state=scheduler.pack_state;
  assign blocks_completed=0;assign prefix_total_cycles=cycles+output_cycles;assign input_checksum=0;
  end else begin:g_prefix
- cyclegan_encoder #(.RESIDUAL_ENABLE(1),.DECODER_ENABLE(1),.OUTPUT_ENABLE(1),.RESIDUAL_INSTANCE_NORM(RESIDUAL_INSTANCE_NORM)) dut(.clk(clk),.rstn(rstn),.start(start),.frame_base(32'd0),
+ cyclegan_encoder #(.RESIDUAL_ENABLE(1),.DECODER_ENABLE(1),.OUTPUT_ENABLE(1),.RESIDUAL_INSTANCE_NORM(RESIDUAL_INSTANCE_NORM),.FULL_INSTANCE_NORM(FULL_INSTANCE_NORM)) dut(.clk(clk),.rstn(rstn),.start(start),.frame_base(32'd0),
   .done(done),.fault(prefix_fault),.cycles(prefix_total_cycles),.command_wait_cycles(command_wait_cycles),.data_wait_cycles(data_wait_cycles),.input_checksum(input_checksum),
   .req_valid(req_valid),.req_ready(req_ready),.req_addr(req_addr),.req_beats(req_beats),.rsp_valid(rsp_valid),.rsp_ready(rsp_ready),.rsp_data(rsp_data),
   .dbg_rd(1'b0),.dbg_addr(11'd0),.pause_each_block(pause_each_layer),.resume(resume),.paused(paused),.blocks_completed(blocks_completed),
   .output_completed(output_completed),.output_cycles(output_cycles),.layers_completed(layers_completed),.decoder_cycles(cycles),.layer_cycles(layer_cycles),
   .feature_write_valid(write_valid),.feature_write_ready(write_ready),.feature_write_addr(write_addr),.feature_write_data(write_data));
+ always @(posedge clk) if(rstn && FULL_INSTANCE_NORM) begin
+  if(dut.g_normalization.normalization.write_a) begin
+   ci=dut.g_normalization.normalization.gamma_base+dut.g_normalization.normalization.request_channel*2;
+   if(dut.g_normalization.normalization.a!==gold_coeff[ci] || dut.g_normalization.normalization.b!==gold_coeff[ci+1])
+    $fatal(1,"IN coefficient point=%0d ch=%0d got=%h/%h expected=%h/%h sum=%0d squares=%0d",dut.g_normalization.normalization.point,dut.g_normalization.normalization.request_channel,dut.g_normalization.normalization.a,dut.g_normalization.normalization.b,gold_coeff[ci],gold_coeff[ci+1],dut.g_normalization.normalization.request_total,dut.g_normalization.normalization.request_squares);
+   coefficient_checks=coefficient_checks+1;
+   if(dut.g_normalization.normalization.request_channel==0) $display("FULL_IN_POINT point=%0d coefficient=%h/%h ticks=%0d",dut.g_normalization.normalization.point,dut.g_normalization.normalization.a,dut.g_normalization.normalization.b,ticks);
+  end
+  if(dut.unit.result_write && dut.unit.cmd[46]) begin
+   eq=dut.unit.write_mode-1;
+   if(dut.g_full_instance.scheduler.layer==0) begin
+    ei=dut.g_full_instance.normalization_pass.channel*192+dut.unit.dst_base-768;expected=gold_enc0[ei];
+   end else if(dut.g_full_instance.scheduler.layer==1) begin
+    ei=dut.g_full_instance.normalization_pass.channel*48+dut.unit.dst_base-768;expected=gold_enc1[ei];
+   end else begin ei=dut.unit.dst_base-1056;expected=gold_enc2[ei];end
+   for(ci=0;ci<25;ci=ci+1) if(dut.unit.pdata[ci*8+:8]!==expected[eq*200+ci*8+:8]) $fatal(1,"Full encoder pool mismatch layer=%0d tile=%0d quadrant=%0d pixel=%0d",dut.g_full_instance.scheduler.layer,ei,eq,ci);
+   encoder_checks=encoder_checks+25;
+  end
+ end
  assign fifo_pop=dut.unit.fifo_pop;assign core_cache_rd_en=dut.unit.cache_rd_en;assign core_cache_rd_addr=dut.unit.cache_rd_addr;
  assign core_fifo_head=dut.unit.fifo_head;
  assign core_cmd=dut.unit.cmd;assign core_result=dut.unit.result_data;assign core_done=dut.core_done;assign core_busy=dut.core_busy;
@@ -74,7 +95,7 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
  always @(posedge dclk) if(rstn) begin
   dticks<=dticks+1;
   if(awvalid && awready) begin
-   if(awaddr[5:0]!=0 || awlen!=3 || awaddr<32'h00300000 || awaddr>=32'h00648000) $fatal(1,"Bad feature AW");
+   if(awaddr[5:0]!=0 || awlen!=3 || awaddr<(FULL_INSTANCE_NORM ? 32'h00200000 : 32'h00300000) || awaddr>=32'h00648000) $fatal(1,"Bad feature AW");
    write_address<=awaddr>>4;write_len<=awlen;write_beat<=0;write_pending<=1;
   end
   if(wvalid && wready) begin
@@ -88,7 +109,7 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
   end
   if(bvalid && bready) bvalid<=0;
   if(arvalid && arready) begin
-   if(araddr<32'h00300000 ? (arlen!=2 || araddr[3:0]!=0) : (arlen!=3 || araddr[5:0]!=0)) $fatal(1,"Bad feature/RGB AR");
+   if(araddr<32'h00200000 ? (arlen!=2 || araddr[3:0]!=0) : (arlen!=3 || araddr[5:0]!=0)) $fatal(1,"Bad feature/RGB AR");
    read_address<=araddr>>4;read_len<=arlen;read_beat<=0;read_pending<=1;read_delay<=ddr_delay+(dticks%17);
   end
   if(read_pending && !rvalid) begin
@@ -114,7 +135,7 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
    residual_values=residual_values+100;
   end
   if(req_valid && req_ready) reads=reads+1;
-  if(write_valid && write_ready) begin
+  if(write_valid && write_ready && (!FULL_INSTANCE_NORM || decoder_active && (FULL_INSTANCE_NORM==1 || g_prefix.dut.pass_busy || decoder_layer==3))) begin
    region=write_addr[23:20];index=(write_addr&32'hfffff)>>7;half=write_addr[6];
    if(region==3) expected=gold1[index];else if(region==4) expected=gold2[index];else if(region==5) expected=gold3[index];else expected=gold4[index];
    expected_half=half ? expected[799:400] : expected[399:0];
@@ -129,7 +150,7 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
   if(core_done && error_code!=0) $fatal(1,"Core error=%0d cmd=%h",error_code,core_cmd);
   if(writer_fault || bridge_fault || prefix_fault) $fatal(1,"AXI/core fault");
   if(ticks%100000==0) $display("OUTPUT_PROGRESS ticks=%0d layer=%0d y=%0d co=%0d loaded=%0d owned=%b pack=%0d halves=%0d",ticks,decoder_layer,decoder_y,decoder_co,decoder_loaded,slot_owned,pack_state,halves);
-  if(ticks>12000000) $fatal(1,"Decoder timeout");
+  if(ticks>20000000) $fatal(1,"Decoder timeout");
  end
  task verify_layer(input integer n);
   integer t,h,b,p,base,count;reg [511:0] actual;reg [799:0] gold;
@@ -152,6 +173,10 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
   if(!$value$plusargs("vectors=%s",vectors)) vectors="build/stage4/vectors";
   if($value$plusargs("ddr-delay=%d",ddr_delay)) $display("DDR delay=%0d",ddr_delay);
   if($test$plusargs("continuous")) pause_each_layer=0;
+  if(FULL_INSTANCE_NORM) begin
+   $readmemh({vectors,"/coefficients.mem"},gold_coeff);
+   $readmemh({vectors,"/stage1_tiles.mem"},gold_enc0);$readmemh({vectors,"/stage2_tiles.mem"},gold_enc1);$readmemh({vectors,"/stage3_tiles.mem"},gold_enc2);
+  end
   $readmemh({vectors,"/block9_q44_tiles.mem"},seed);$readmemh({vectors,"/decoder1_tiles.mem"},gold1);
   $readmemh({vectors,"/decoder2_tiles.mem"},gold2);$readmemh({vectors,"/decoder3_tiles.mem"},gold3);
   $readmemh({vectors,"/output_u8_tiles.mem"},gold4);$readmemh({vectors,"/input_crc.mem"},expected_crc);
@@ -178,9 +203,11 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INS
   end
   wait(done);@(negedge clk);
   if(!pause_each_layer) for(layer=OUTPUT_ONLY ? 4 : 1;layer<=4;layer=layer+1) verify_layer(layer);
-  if(commands!=(FULL_PREFIX ? 170880 : OUTPUT_ONLY ? 18432 : 125184) || halves!=(OUTPUT_ONLY ? 4608 : 21504) || checks!=(OUTPUT_ONLY ? 230400 : 1075200) || values!=(OUTPUT_ONLY ? 230400 : 1075200) || reads!=(FULL_PREFIX ? 24576 : OUTPUT_ONLY ? 12288 : 16896) || overlap==0 || layers_completed!=(OUTPUT_ONLY ? 0 : 3) || !output_completed) $fatal(1,"Counts commands=%0d halves=%0d checks=%0d reads=%0d",commands,halves,checks,reads);
+  if(!FULL_INSTANCE_NORM && (commands!=(FULL_PREFIX ? 170880 : OUTPUT_ONLY ? 18432 : 125184) || halves!=(OUTPUT_ONLY ? 4608 : 21504) || checks!=(OUTPUT_ONLY ? 230400 : 1075200) || values!=(OUTPUT_ONLY ? 230400 : 1075200) || reads!=(FULL_PREFIX ? 24576 : OUTPUT_ONLY ? 12288 : 16896) || overlap==0 || layers_completed!=(OUTPUT_ONLY ? 0 : 3) || !output_completed)) $fatal(1,"Counts commands=%0d halves=%0d checks=%0d reads=%0d",commands,halves,checks,reads);
   if(FULL_PREFIX && (residual_values!=345600 || input_checksum!==expected_crc[0])) $fatal(1,"Full prefix residual/CRC mismatch");
   if(output_jobs!=2304 || command_wait_cycles!=0) $fatal(1,"Output scheduling/count mismatch");
+  if(FULL_INSTANCE_NORM && (coefficient_checks!=(FULL_INSTANCE_NORM==2 ? 688 : 656) || encoder_checks!=268800)) $fatal(1,"Full IN checks coeff=%0d encoder=%0d",coefficient_checks,encoder_checks);
+  $display("FULL_IN_COUNTS coefficients=%0d encoder=%0d",coefficient_checks,encoder_checks);
   $display("PASS stage4: full_prefix=%0d output_only=%0d values=%0d residual_values=%0d commands=%0d decoder_cycles=%0d output_cycles=%0d prefix_cycles=%0d command_wait=%0d data_wait=%0d halves=%0d reads=%0d overlap=%0d",FULL_PREFIX,OUTPUT_ONLY,values,residual_values,commands,cycles,output_cycles,prefix_total_cycles,command_wait_cycles,data_wait_cycles,halves,reads,overlap);
   $finish;
  end

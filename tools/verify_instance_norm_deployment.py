@@ -9,7 +9,7 @@ from live_norm_reference import BN_BASES
 ROOT=Path(__file__).resolve().parents[1]
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 
-def pair_check(pair):
+def pair_check(pair,live_points=18):
     report=json.loads((pair/'capture_report.json').read_text())
     assert report['pass_matched_capture']
     rgbx=np.frombuffer((pair/'camera_original.rgbx').read_bytes(),dtype=np.uint8).reshape(240,320,4)
@@ -20,15 +20,15 @@ def pair_check(pair):
     model=pair/'reference'
     with (pair/'reference.log').open('w') as log:
         subprocess.run([sys.executable,'-B',str(ROOT/'tools/prepare_instance_norm_model.py'),
-                        '--image',str(pair/'camera_original.png'),'--output',str(model)],
+                        '--image',str(pair/'camera_original.png'),'--output',str(model),'--live-points',str(live_points)],
                        stdout=log,stderr=subprocess.STDOUT,check=True)
     manifest=json.loads((model/'params_manifest.json').read_text())
-    assert manifest['live_normalization_ids']==list(range(5,23))
+    assert manifest['live_normalization_ids']==(list(range(5,23)) if live_points==18 else list(range(live_points)))
     assert sha(model/'generator_params_q88.mem')==sha(ROOT/'build/cyclegan_model/generator_params_q88.mem')
     weights=[int(v,16) for v in (model/'generator_params_q88.mem').read_text().split()]
     weights=[v-65536 if v&32768 else v for v in weights]
     records=json.loads((model/'vectors/live_normalization.json').read_text())['coefficients']
-    assert len(records)==18
+    assert len(records)==live_points
     for point in records:
         base=BN_BASES[point['id']]
         for ch,(a,b) in enumerate(zip(point['a'],point['b'])):weights[base+2*ch:base+2*ch+2]=[a,b]
@@ -47,11 +47,11 @@ def pair_check(pair):
     assert np.array_equal(actual,result)
     Image.fromarray(actual.transpose(1,2,0)).save(pair/'fpga_styled.png')
     comparison=dict(values=230400,mismatches=mismatches,max_absolute_error=0,instruction_layers_checked=16,
-                    live_normalization_ids=manifest['live_normalization_ids'],live_channels=576,
+                    live_normalization_ids=manifest['live_normalization_ids'],live_channels=sum(len(v['a']) for v in records),
                     input_rgbx_sha256=sha(pair/'camera_original.rgbx'),fpga_padded_sha256=sha(pair/'fpga_styled.tiles'),
                     input_checksum=zlib.crc32(stream),output_rgb_sha256=hashlib.sha256(actual.tobytes()).hexdigest())
     (pair/'comparison.json').write_text(json.dumps(comparison,indent=2)+'\n')
-    print('INSTANCE_VIDEO_PAIR_PASS 230400 bytes; 18 IN points; 16 instruction-model tensors',flush=True)
+    print(f'INSTANCE_VIDEO_PAIR_PASS 230400 bytes; {live_points} IN points; 16 instruction-model tensors',flush=True)
 
 def record(out):
     project=Path((out/'staging_path.txt').read_text(encoding='utf-8-sig').strip())
@@ -118,7 +118,8 @@ def record(out):
 
 if __name__=='__main__':
     cli=argparse.ArgumentParser(description=__doc__);cli.add_argument('--pair',type=Path)
+    cli.add_argument('--live-points',type=int,choices=(18,23,26),default=18)
     cli.add_argument('--record',action='store_true');cli.add_argument('--out',type=Path,default=ROOT/'build/video_instance_residual_verified')
     args=cli.parse_args()
-    if args.pair:pair_check(args.pair.resolve())
+    if args.pair:pair_check(args.pair.resolve(),args.live_points)
     if args.record:record(args.out.resolve())

@@ -1,4 +1,4 @@
-"""Independent integer model: same-frame IN at residual points 5..22 only.
+"""Independent integer model: selectable 18, 23, or all 26 same-frame IN points.
 
 Derived from pe10_10/tools/prepare_generator_params.py; that reference tree is
 read-only. Encoder/decoder use the original fixed affine coefficients.
@@ -21,7 +21,9 @@ cli=argparse.ArgumentParser(description=__doc__)
 cli.add_argument('--checkpoint',type=Path,default=ROOT/'netG_B_epoch11.pth')
 cli.add_argument('--output',type=Path,default=Path(__file__).resolve().parents[1]/'build/instance_residual_model')
 cli.add_argument('--image',type=Path,default=ROOT/'weight/test.jpg')
+cli.add_argument('--live-points',type=int,choices=(18,23,26),default=18)
 args=cli.parse_args()
+live_ids=list(range(5,23)) if args.live_points==18 else list(range(args.live_points))
 OUT=args.output.resolve();OUT.mkdir(parents=True,exist_ok=True)
 CHECKPOINT=args.checkpoint.resolve();IMAGE=args.image.resolve();words=[];enc=[];blocks=[];dec=[]
 raw_norm=export_norm(CHECKPOINT,OUT)
@@ -120,7 +122,7 @@ def dw(act,w,reflect=False):
  return requant(raw)
 def norm(act,ab):
  global norm_id
- if 5<=norm_id<23:
+ if norm_id in live_ids:
   result,a,b=live_affine(act,*raw_norm[norm_id])
   norm_records.append(dict(id=norm_id,shape=list(act.shape),a=a.tolist(),b=b.tolist(),
    sums=act.sum(axis=(1,2)).tolist(),squares=(act*act).sum(axis=(1,2)).tolist()))
@@ -171,7 +173,7 @@ for name,invert in [('vectors',False),('vectors_inverted',True)]:
   output_mean_tanh_error=float(error.mean()),input_sha256=hashlib.sha256(frame).hexdigest()),indent=2)+'\n')
  print('GENERATOR_REFERENCE_PASS',name,stats[-1],flush=True)
  assert norm_id==26
- (dest/'live_normalization.json').write_text(json.dumps(dict(layers=18,ids=list(range(5,23)),
+ (dest/'live_normalization.json').write_text(json.dumps(dict(layers=len(live_ids),ids=live_ids,
   coefficients=norm_records,contract='live_norm_reference.py'),indent=2)+'\n')
 manifest=dict(count=len(words),rom_depth=rom_depth,checkpoint=CHECKPOINT.name,
  checkpoint_sha256=hashlib.sha256(CHECKPOINT.read_bytes()).hexdigest(),
@@ -186,7 +188,7 @@ manifest['quantization']=dict(weight_format='Q8.8',activation_format='Q4.4',
  input_tensors_with_q88_saturation=saturated_inputs,
  note='Stored BN values and derived affine factors follow the existing Q8.8 saturation rules.')
 manifest['reference_image_sha256']=hashlib.sha256(IMAGE.read_bytes()).hexdigest()
-manifest['live_normalization_layers']=18
-manifest['live_normalization_ids']=list(range(5,23))
+manifest['live_normalization_layers']=len(live_ids)
+manifest['live_normalization_ids']=live_ids
 (OUT/'params_manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
 print('GENERATOR_PARAMS_PASS words='+str(len(words)))

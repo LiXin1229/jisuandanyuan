@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import prepare_encoder_deployment as base
 ROOT=base.ROOT
 
-def prepare(dest,host_image=False):
+def prepare(dest,host_image=False,norm_points=26):
  dest=dest.resolve();base.board(dest,residual=True,decoder=True,output=True)
  manifest=json.loads((dest/'source_manifest.json').read_text())
  video=sorted((ROOT/'rtl/video').glob('*.v'))+sorted((ROOT/'rtl/video').glob('*.sv'))
@@ -21,19 +21,22 @@ def prepare(dest,host_image=False):
   'schedule':'overlap encoder with VSYNC acknowledgement and original copy; gate final writes until bank ready',
   'styled_bases':[0x600000,0x700000],
   'original_bases':[0x800000,0x900000],'tile_layout':'50 valid + 14 zero + 50 valid + 14 zero'}
- manifest['video_contract']['normalization']={'mode':'same-frame instance normalization at residual points 5..22',
-  'live_points':18,'fixed_points':8,'statistics_lanes':4,'samples_per_residual_channel':1200,
+ manifest['video_contract']['normalization']={'mode':'same-frame instance normalization', 'ids':list(range(5,23)) if norm_points==18 else list(range(norm_points)),
+  'live_points':norm_points,'fixed_points':26-norm_points,'statistics_lanes':4,'samples_per_residual_channel':1200,
   'coefficient_ip':'Efinix SINGLE sqrt80 + iterative unsigned64/40 divider; shared across all channels',
   'contract':'tools/live_norm_reference.py'}
  ns='http://www.efinixinc.com/enf_proj';ET.register_namespace('efx',ns);n={'e':ns}
  tree=ET.parse(dest/'encoder_board.xml');project=tree.getroot();design=project.find('e:design_info',n)
  design.find('e:top_module',n).set('name','cyclegan_camera_board')
+ source=dest/'cyclegan_camera_board.sv'
+ source.write_text(source.read_text().replace('INSTANCE_NORM_POINTS=26','INSTANCE_NORM_POINTS='+str(norm_points)))
  if host_image:
   # The optional source replaces the sensor, while retaining the current core.
   source=dest/'cyclegan_camera_board.sv'
   source.write_text(source.read_text().replace('SIM_CAMERA=0,HOST_IMAGE=0','SIM_CAMERA=0,HOST_IMAGE=1'))
   manifest['video_contract']['input_mode']='JTAG fixed RGBx image; sensor disabled'
   manifest['video_contract']['staged_top_sha256']=hashlib.sha256(source.read_bytes()).hexdigest()
+ manifest['video_contract']['staged_top_sha256']=hashlib.sha256(source.read_bytes()).hexdigest()
  for e in list(design):
   if e.tag.endswith('design_file') and e.get('name') in ('frame_pingpong.v','AXI4_AWARMux.v','cyclegan_encoder_board.v'):design.remove(e)
  for source in video:design.insert(1,ET.Element('{'+ns+'}design_file',name=source.name,version='default',library='default'))
@@ -62,4 +65,5 @@ def prepare(dest,host_image=False):
 if __name__=='__main__':
  ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--board',required=True,type=Path)
  ap.add_argument('--host-image',action='store_true')
- args=ap.parse_args();prepare(args.board,args.host_image)
+ ap.add_argument('--norm-points',type=int,choices=(18,23,26),default=26)
+ args=ap.parse_args();prepare(args.board,args.host_image,args.norm_points)

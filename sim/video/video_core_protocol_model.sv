@@ -1,6 +1,6 @@
 // Simulation-only network protocol source; never a synthesis input.
 module cyclegan_encoder #(parameter COLUMN_PREFETCH=0, RESIDUAL_ENABLE=0, DECODER_ENABLE=0, OUTPUT_ENABLE=0,
- RESIDUAL_INSTANCE_NORM=0,CORE_DELAY=8000000) (
+ RESIDUAL_INSTANCE_NORM=0,FULL_INSTANCE_NORM=0,CORE_DELAY=8000000) (
  input wire clk,rstn,start,input wire [31:0] frame_base,
  output wire busy,output reg done,fault,
  output reg [31:0] cycles,output reg [31:0] mac_cycles,first_output_cycle,
