@@ -2,7 +2,11 @@
 
 目标器件 Ti60 F225，Efinity 2026.1；100 路 DSP、10×10 tile、signed8 Q4.4 数据和 signed16 Q8.8 参数。
 
-当前实时摄像头版本保持 171.43 MHz，通过减少转置卷积的无效邻域装载，将结果模式整网处理帧率从 **23.07 提至 27.56 fps**，原图显示模式从 **23.99 提至 28.78 fps**。完整视频工程为 **26141 LUT4、12988 FF、249 BRAM、103 DSP**，比上一版仅多 15 LUT 和 1 FF。同帧 230400 个 RGB 字节零差异，两种模式各 60 秒、合计 3433 帧持续测试通过。工程为 `build/video_board_schedule2/encoder_board.xml`，见 [本轮调度优化记录](docs/cyclegan_video_schedule_optimization.md)。
+当前实时摄像头版本已在残差区的 **18/26 个归一化点、576 个通道**恢复同帧实例归一化，采用4路旁路统计和共享的易灵思非流水线开根/除法 IP，继续复用100路主 PE。残差区相比固定归一化仅增加 **531拍、3.10微秒**，无新增特征 DDR 读写，指令供应等待为0。计算时钟仍为171.43 MHz，完整视频工程为 **28367 LUT4、14537 FF、253/256 BRAM、104 DSP48＋4 DSP24**。工程为 `build/video_board_instance_residual/encoder_board.xml`，见 [残差同帧归一化记录](docs/cyclegan_residual_instance_norm.md)。编码器5个点与转置卷积3个点将在后续阶段恢复。
+
+本轮风格模式 **27.54 FPS**、原图模式 **28.77 FPS**，两种模式合计1742帧持续测试通过；同帧摄像头230400个RGB字节与整数参考零差异，两组完整原生RTL仿真均通过。
+
+固定归一化调度基线通过减少转置卷积的无效邻域装载，将结果模式整网处理帧率从 **23.07 提至 27.56 fps**，原图显示模式从 **23.99 提至 28.78 fps**。完整视频工程为 **26141 LUT4、12988 FF、249 BRAM、103 DSP**，比上一版仅多 15 LUT 和 1 FF。同帧230400个RGB字节零差异，两种模式各60秒、合计3433帧持续测试通过。历史工程保留在 `build/video_board_schedule2/encoder_board.xml`，见 [调度优化记录](docs/cyclegan_video_schedule_optimization.md)。
 
 本次四阶段板级迭代已完成：FPGA 自主执行 RGB 输入、三层编码、九个残差块、三层转置卷积和 **7×7 输出卷积/Tanh**，生成 **3×240×320 uint8 RGB 图像**。各阶段复用同一个计算单元和固定归一化参数，输出层采用四行预取、交替双槽及现有 DDR 写通道。完整 DDR/JTAG 网表为 **222 BRAM、22804 LUT4、12323 FF、100 DSP**；相对第三阶段仅新增 2 个权重 BRAM 和 2 个 Tanh BRAM，feature cache 未扩容。两次下载、四帧验收通过，共 **3302400 个值零差异**，全部输入 CRC 匹配，指令供应等待为零。150 MHz 下整网约 **46.61 ms**，输出层约 **12.71 ms**，setup/hold 余量 **0.799/0.035 ns**。DDR 相位为 6，板级签名 `0xe315`。详见 [第四阶段部署记录](docs/cyclegan_stage4_deployment.md)、[第四阶段验证证据](docs/analysis/cyclegan_stage4_deployment.json)、[第三阶段部署记录](docs/cyclegan_stage3_deployment.md)、[第二阶段资源优化](docs/cyclegan_stage2_resource_optimization.md) 和 [第一阶段记录](docs/cyclegan_stage1_deployment.md)。
 
@@ -50,6 +54,6 @@ RTL 仿真使用 Icarus Verilog。综合脚本为 Efinity 建立 ASCII 路径副
 
 板上使用时，当前已有官方 JTAG 上传/回读、DDR 帧缓冲和整网自主调度。执行 `scripts/run_output_board.ps1 -Program -RepeatBoot` 可构建、烧录并验证包含 7×7 输出与 Tanh 的完整生成器；各历史阶段构建脚本保留。复现步骤、统计协议、DDR 特征/输出布局见 [第四阶段部署记录](docs/cyclegan_stage4_deployment.md)。
 
-实时摄像头版本执行 `scripts/run_video_board.ps1 -Program`：SC2210 → BGGR/自动白平衡/Gamma → 320×240 完整网络 → HDMI，实体按键可切换原图与网络结果。运行 `scripts/verify_video_board.ps1` 可进行同帧数值比较和连续视频测试，详见 [实时视频部署记录](docs/cyclegan_video_deployment.md)。
+实时摄像头版本执行 `scripts/run_video_board.ps1 -Program`：SC2210 → BGGR/自动白平衡/Gamma → 320×240完整网络 → HDMI，实体按键可切换原图与网络结果。当前残差实例归一化版本的参考生成、原生仿真、同帧数值比较和持续测试使用 `scripts/verify_instance_norm_board.ps1`，步骤见 [残差同帧归一化记录](docs/cyclegan_residual_instance_norm.md)。原 `scripts/verify_video_board.ps1` 保留用于历史固定归一化版本。
 
 上一轮通过提前启动下一帧编码、重叠原图拷贝和 171.43 MHz 计算时钟提高帧率，见 [上一轮帧率优化记录](docs/cyclegan_video_fps_optimization.md)。本轮继续复用现有 DDR 与缓存，仅缩短前向小核装窗流程，资源和上板对比、复现命令见 [调度优化记录](docs/cyclegan_video_schedule_optimization.md)。

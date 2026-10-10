@@ -21,6 +21,10 @@ def prepare(dest):
   'schedule':'overlap encoder with VSYNC acknowledgement and original copy; gate final writes until bank ready',
   'styled_bases':[0x600000,0x700000],
   'original_bases':[0x800000,0x900000],'tile_layout':'50 valid + 14 zero + 50 valid + 14 zero'}
+ manifest['video_contract']['normalization']={'mode':'same-frame instance normalization at residual points 5..22',
+  'live_points':18,'fixed_points':8,'statistics_lanes':4,'samples_per_residual_channel':1200,
+  'coefficient_ip':'Efinix SINGLE sqrt80 + iterative unsigned64/40 divider; shared across all channels',
+  'contract':'tools/live_norm_reference.py'}
  ns='http://www.efinixinc.com/enf_proj';ET.register_namespace('efx',ns);n={'e':ns}
  tree=ET.parse(dest/'encoder_board.xml');project=tree.getroot();design=project.find('e:design_info',n)
  design.find('e:top_module',n).set('name','cyclegan_camera_board')

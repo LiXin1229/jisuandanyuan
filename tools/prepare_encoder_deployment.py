@@ -12,7 +12,10 @@ REF = Path(r'C:\Users\Administrator\Desktop\jisuan\pe10_10')
 SOURCES = ['mn_cache.sv','mn_param_ram.sv','mn_instruction_fifo.sv','mn_dw_buffer_bram.sv',
            'mn_input_mux.sv','mn_pe_array.sv','mn_compact.sv','mn_postprocess.sv',
            'mn_model_rom.sv','mn_encoder_rom.sv','mn_tanh.sv','mobilenet_unit.sv',
-           'cyclegan_rgb_loader.sv','cyclegan_encoder.sv','cyclegan_ddr_read_bridge.sv']
+           'cyclegan_rgb_loader.sv','cyclegan_encoder.sv','cyclegan_ddr_read_bridge.sv',
+           'mn_instance_norm.sv','mn_instance_norm_coeff.sv','mn_instance_norm_gamma.sv',
+           'cyclegan_residual_instance_scheduler.sv',
+           'ip/norm_sqrt80/norm_sqrt80.v','ip/norm_div64_40/norm_div64_40.sv']
 
 def assets():
     out=ROOT/'build/stage1';out.mkdir(parents=True,exist_ok=True)
@@ -63,6 +66,7 @@ def board(dest,residual=False,decoder=False,output=False):
         assert decoder and residual
         sources+=['mn_generator_rom.sv']
     for name in sources+['mn_isa.vh','mn_model_params_init.vh','mn_tanh_u8.mem']:
+        (dest/name).parent.mkdir(parents=True,exist_ok=True)
         shutil.copy2(ROOT/'rtl'/name,dest/name)
     (dest/'rtl').mkdir(exist_ok=True)
     shutil.copy2(ROOT/'rtl/mn_tanh_u8.mem',dest/'rtl/mn_tanh_u8.mem')

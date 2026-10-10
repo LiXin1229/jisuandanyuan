@@ -37,7 +37,10 @@ try {
   $match=[regex]::Match($mapping,"(?m)^$name\s*:\s*(\d+)")
   if(!$match.Success) {throw "Missing resource: $name"};$resources[$name]=[int]$match.Groups[1].Value
  }
- if($resources.EFX_DSP48 -gt 103 -or ($resources.EFX_RAM10+$resources.EFX_DPRAM10) -gt 256) {throw 'Video resource budget exceeded'}
+ $smallDsp=[regex]::Match($mapping,'(?m)^EFX_DSP24\s*:\s*(\d+)')
+ $resources.EFX_DSP24=if($smallDsp.Success) {[int]$smallDsp.Groups[1].Value} else {0}
+ # Baseline103 DSP48; IN adds one coefficient DSP48 and four square DSP24.
+ if($resources.EFX_DSP48 -gt 104 -or $resources.EFX_DSP24 -gt 4 -or ($resources.EFX_RAM10+$resources.EFX_DPRAM10) -gt 256) {throw 'Video resource budget exceeded'}
  $resources | ConvertTo-Json | Set-Content -LiteralPath "$OutputDir/resources.json"
  Write-Output ('VIDEO_RESOURCES '+($resources|ConvertTo-Json -Compress))
  Copy-Item -LiteralPath (Join-Path $videoStage 'outflow') -Destination $OutputDir -Recurse -Force

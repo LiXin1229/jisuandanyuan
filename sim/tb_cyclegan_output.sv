@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 // Real compute RTL, both CDC bridges and randomized DDR backpressure.
 // Full RGB-to-RGB integration, or a focused output test seeded from DDR.
-module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0);
+module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0, RESIDUAL_INSTANCE_NORM=0);
  reg clk=0,dclk=0;always #3.333 clk=~clk;always #5.208 dclk=~dclk;
  reg rstn=0,start=0,seed_wr=0;reg [10:0] seed_addr=0;reg [799:0] seed_data=0;
  wire [127:0] instruction;wire instruction_valid,instruction_ready,core_busy,memory_ready;wire [2:0] queued;
@@ -47,7 +47,7 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0);
  assign decoder_loaded=scheduler.loaded_rows;assign slot_owned=scheduler.owned;assign slot_ready=scheduler.ready_slots;assign pack_state=scheduler.pack_state;
  assign blocks_completed=0;assign prefix_total_cycles=cycles+output_cycles;assign input_checksum=0;
  end else begin:g_prefix
- cyclegan_encoder #(.RESIDUAL_ENABLE(1),.DECODER_ENABLE(1),.OUTPUT_ENABLE(1)) dut(.clk(clk),.rstn(rstn),.start(start),.frame_base(32'd0),
+ cyclegan_encoder #(.RESIDUAL_ENABLE(1),.DECODER_ENABLE(1),.OUTPUT_ENABLE(1),.RESIDUAL_INSTANCE_NORM(RESIDUAL_INSTANCE_NORM)) dut(.clk(clk),.rstn(rstn),.start(start),.frame_base(32'd0),
   .done(done),.fault(prefix_fault),.cycles(prefix_total_cycles),.command_wait_cycles(command_wait_cycles),.data_wait_cycles(data_wait_cycles),.input_checksum(input_checksum),
   .req_valid(req_valid),.req_ready(req_ready),.req_addr(req_addr),.req_beats(req_beats),.rsp_valid(rsp_valid),.rsp_ready(rsp_ready),.rsp_data(rsp_data),
   .dbg_rd(1'b0),.dbg_addr(11'd0),.pause_each_block(pause_each_layer),.resume(resume),.paused(paused),.blocks_completed(blocks_completed),
@@ -109,7 +109,7 @@ module tb_cyclegan_output #(parameter FULL_PREFIX=1, OUTPUT_ONLY=0);
   if(FULL_PREFIX && !decoder_active && layers_completed==0 && (slot_owned!=0 || slot_ready!=0 || pack_state!=0 || decoder_co!=0))
    $fatal(1,"Encoder/residual writeback leaked into the decoder scheduler");
   if(FULL_PREFIX && wb_valid && wb_opcode==5) begin
-   index=blocks_completed*384+wb_addr-(blocks_completed[0] ? 384 : 0);
+   index=blocks_completed*384+wb_addr-(RESIDUAL_INSTANCE_NORM ? (blocks_completed==8 ? 0 : 1056) : (blocks_completed[0] ? 384 : 0));
    if(core_result!==gold_res[index]) $fatal(1,"Prefix residual mismatch block=%0d tile=%0d",blocks_completed+1,index%384);
    residual_values=residual_values+100;
   end

@@ -1,5 +1,5 @@
 `include "mn_isa.vh"
-module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=0, RESIDUAL_PREFIX=0, DECODER_PREFIX=0, STREAM_READS=0, GENERATOR_ROM=0) (
+module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=0, RESIDUAL_PREFIX=0, DECODER_PREFIX=0, STREAM_READS=0, GENERATOR_ROM=0, LIVE_NORM=0) (
     input wire clk,reset,
     input wire [127:0] instruction,
     input wire instruction_valid,
@@ -23,6 +23,8 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     output reg done,
     output reg [3:0] error_code
     ,output wire writeback_valid,output wire [10:0] writeback_addr,output wire [3:0] writeback_opcode
+    ,input wire norm_override,input wire [15:0] norm_data
+    ,output wire norm_read,output wire [14:0] norm_addr,output wire [799:0] writeback_data
 );
     localparam IDLE=0,CHECK=1,CLEAR=2,LOAD=3,LOAD_DRAIN=4,PAD_X=5,PAD_Y=6,
         DW_RUN=7,PW_RUN=8,N_X=9,ADD_FIRST=10,ADD_SECOND=11,
@@ -200,26 +202,32 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
         end
         if(reset) begin issue_valid=0;cache_rd_en=0;load_request=0;end
     end
+    wire [15:0] rom_param_data;
     wire [15:0] param_data;
+    reg d1_norm;
+    assign norm_read=LIVE_NORM && norm_override && opcode==`MN_OP_NORM && issue_valid;
+    assign norm_addr=issue_param;
+    always @(posedge clk) if(reset) d1_norm<=0;else d1_norm<=norm_read;
+    assign param_data=LIVE_NORM && d1_norm ? norm_data : rom_param_data;
     wire param_valid;
     generate if(MODEL_PARAMS) begin: model_parameters
         if(GENERATOR_ROM) begin: generator_rom
-            mn_generator_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
+            mn_generator_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(rom_param_data));
         end else if(DECODER_PREFIX) begin: decoder_rom
-            mn_decoder_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
+            mn_decoder_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(rom_param_data));
         end else if(RESIDUAL_PREFIX) begin: residual_rom
-            mn_residual_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
+            mn_residual_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(rom_param_data));
         end else if(ENCODER_ONLY) begin: encoder_rom
-            mn_encoder_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
+            mn_encoder_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(rom_param_data));
         end else begin: full_rom
-            mn_model_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(param_data));
+            mn_model_rom parameters(.clk(clk),.rd_en(issue_valid && !issue_const && !issue_add),.addr(issue_param),.data(rom_param_data));
         end
         reg pv;always @(posedge clk) if(reset) pv<=0;else pv<=issue_valid && !issue_const && !issue_add;
         assign param_valid=pv;
     end else begin: writable_parameters
         mn_param_ram parameters(.clk(clk),.reset(reset),.wr_en(host_param_wr && host_memory_ready),
             .wr_addr(host_param_addr[11:0]),.wr_data(host_param_data),.rd_en(issue_valid && !issue_const && !issue_add),
-            .rd_addr(issue_param[11:0]),.rd_data(param_data),.rd_valid(param_valid));
+            .rd_addr(issue_param[11:0]),.rd_data(rom_param_data),.rd_valid(param_valid));
     end endgenerate
     reg d1_valid,d1_last,d1_bias,d1_const,d1_add,d1_load,d1_zero;
     reg [3:0] d1_owner;
@@ -284,6 +292,7 @@ module mobilenet_unit #(parameter MODEL_PARAMS=0, ENCODER_ONLY=0, STREAM_WRITES=
     // without a new RAM read. Port A writes can still proceed independently.
     assign host_read_ready=host_stream_ready && !d1_load && state!=LOAD && state!=LOAD_DRAIN;
     assign writeback_valid=result_write;assign writeback_addr=dst_base;assign writeback_opcode=opcode;
+    assign writeback_data=qdata;
     mn_cache cache(.clk(clk),.reset(reset),.wr_en(result_write),.wr_addr(dst_base),.wr_data(result_data),.wr_quadrants(result_mask),
         .rd_en(cache_rd_en),.rd_addr(cache_rd_addr),.rd_data(cache_data),.rd_valid(cache_valid),
         .host_wr(host_cache_wr && (STREAM_WRITES ? host_stream_ready : host_memory_ready)),.host_rd(host_cache_rd && (STREAM_READS ? host_read_ready : host_memory_ready)),

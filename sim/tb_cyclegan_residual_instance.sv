@@ -1,0 +1,134 @@
+`timescale 1ns/1ps
+module tb_cyclegan_residual_instance;
+ reg clk=0;always #5 clk=~clk;
+ reg rstn=0,start=0;wire busy,done,fault;
+ wire [31:0] cycles,mac_cycles,first_output_cycle,command_wait_cycles,data_wait_cycles;
+ wire [31:0] input_checksum;reg [31:0] expected_crc[0:0];
+ wire req_valid,req_ready,rsp_ready;wire [31:0] req_addr;wire [2:0] req_beats;
+ reg rsp_valid=0;reg [511:0] rsp_data=0;
+ reg dbg_rd=0;reg [10:0] dbg_addr=0;wire [799:0] dbg_data;wire dbg_valid;
+ wire [4:0] raw_rows,stage1_rows,stage2_rows,stage3_rows;
+ integer ticks=0,pending=0,delay_count=0,addr=0,i,j,index,co,col,quad,checks=0,loads=0,overlap=0,commands=0,ddr_delay=2;
+ reg [127:0] memory[0:19199];reg [799:0] gold0[0:1535],gold1[0:767],gold2[0:383];reg [799:0] expected;
+ string vectors;
+ assign req_ready=!pending && !rsp_valid && ticks%7!=0;
+ reg pause_each_block=1,resume=0;wire paused;wire [3:0] blocks_completed;wire [10:0] residual_output_base;
+ wire [31:0] encoder_cycles,residual_cycles,block_cycles;
+ integer block,rr,res_checks=0,paused_checks=0,res_ddr=0,baseline_commands;
+ reg [799:0] gold_res[0:3455];string block_file;reg [31:0] paused_cycles;
+ reg [15:0] gold_coeff[0:1151];integer coefficient_checks=0,point_index;
+ reg seed_wr=0;reg [10:0] seed_addr=0;reg [799:0] seed_data=0;
+ cyclegan_encoder #(.RESIDUAL_ENABLE(1),.RESIDUAL_INSTANCE_NORM(1)) dut(.*,.output_completed(),.output_cycles(),.frame_base(32'd0),.layers_completed(),.decoder_cycles(),.layer_cycles(),
+  .feature_write_valid(),.feature_write_ready(1'b1),.feature_write_addr(),.feature_write_data());
+ always @(posedge clk) if(rstn) begin
+  ticks<=ticks+1;
+  if($test$plusargs("debug") && (ticks<40 || ticks%1000==0))
+   $display("DEBUG tick=%0d state=%0d load_state=%0d phase=%0d core_state=%0d q=%0d",ticks,dut.state,dut.loader.state,dut.phase,dut.unit.state,dut.queued);
+  if(ticks%20000==0) $display("ENCODER_TICK %0d state=%0d raw=%0d rows=%0d/%0d/%0d checks=%0d",ticks,dut.state,raw_rows,stage1_rows,stage2_rows,stage3_rows,checks);
+  if(req_valid && req_ready) begin
+   if(dut.state==dut.RESIDUAL) res_ddr=res_ddr+1;
+   if(req_beats!=3 || req_addr[3:0]!=0) $fatal(1,"DDR alignment");
+   addr=req_addr>>4;pending<=1;delay_count<=ddr_delay+(ddr_delay==2 ? ticks%9 : ticks%29);
+  end
+  if(pending) begin
+   if(delay_count!=0) delay_count<=delay_count-1;
+   else begin
+    for(i=0;i<3;i=i+1) rsp_data[i*128+:128]<=memory[addr+i];
+    rsp_valid<=1;pending<=0;
+   end
+  end
+  if(rsp_valid && rsp_ready) rsp_valid<=0;
+  if(dut.load_wr) begin
+   loads=loads+1;
+   if(dut.core_busy) overlap=overlap+1;
+   if(dut.unit.cache_rd_en && dut.unit.cache_rd_addr==dut.load_addr) $fatal(1,"DMA/read ownership collision");
+   if(dut.unit.result_write && dut.unit.dst_base==dut.load_addr) $fatal(1,"DMA/write ownership collision");
+  end
+  if(dut.unit.fifo_pop) commands=commands+1;
+  if(dut.g_instance_residual.scheduler.outstanding>5) $fatal(1,"Residual outstanding overflow/underflow");
+  if(dut.state==dut.RUN && dut.outstanding>5) $fatal(1,"Encoder outstanding overflow/underflow");
+  if(dut.g_instance_residual.scheduler.active_block_cycles==131071 || residual_cycles>1048575)
+   $fatal(1,"Instance residual counter bound exceeded state=%0d phase=%0d ch=%0d outstanding=%0d sample_idle=%0d ready=%h coeff_state=%0d",dut.g_instance_residual.scheduler.state,dut.g_instance_residual.scheduler.phase,dut.g_instance_residual.scheduler.ch,dut.g_instance_residual.scheduler.outstanding,dut.g_instance_residual.sample_idle,dut.g_instance_residual.normalization.ready_channels,dut.g_instance_residual.normalization.request_state);
+  if(dut.g_instance_residual.normalization.write_a) begin
+   point_index=dut.g_instance_residual.scheduler.norm_point*64+dut.g_instance_residual.normalization.request_channel*2;
+   if(dut.g_instance_residual.normalization.a!==gold_coeff[point_index] || dut.g_instance_residual.normalization.b!==gold_coeff[point_index+1])
+    $fatal(1,"IN coefficient mismatch point=%0d channel=%0d got=%h/%h expected=%h/%h sum=%0d squares=%0d",point_index/64,(point_index%64)/2,dut.g_instance_residual.normalization.a,dut.g_instance_residual.normalization.b,gold_coeff[point_index],gold_coeff[point_index+1],dut.g_instance_residual.normalization.request_total,dut.g_instance_residual.normalization.request_squares);
+   coefficient_checks=coefficient_checks+1;
+  end
+  if(dut.state==dut.RUN) begin
+   if(dut.center!==dut.input_base+(dut.y%3)*dut.row_size+dut.xc+dut.ch ||
+      dut.upper!==dut.input_base+((dut.y==0 ? 0 : dut.y-1)%3)*dut.row_size+dut.xc+dut.ch ||
+      dut.lower!==dut.input_base+((dut.y==dut.height-1 ? dut.y : dut.y+1)%3)*dut.row_size+dut.xc+dut.ch)
+    $fatal(1,"Ring address changed");
+  end
+  if(dut.unit.result_write && dut.unit.opcode==5) begin
+   index=dut.g_instance_residual.scheduler.blocks_completed*384+dut.unit.dst_base-dut.g_instance_residual.scheduler.dest_base;
+   if(dut.unit.result_data!==gold_res[index]) $fatal(1,"Residual write mismatch block=%0d tile=%0d",dut.g_instance_residual.scheduler.blocks_completed+1,index%384);
+   res_checks=res_checks+100;
+  end
+  if(dut.unit.result_write && dut.unit.cmd[46]) begin
+   quad=dut.unit.write_mode-1;
+   if(dut.stage==0) begin
+    co=(dut.unit.dst_base-288)%8;col=((dut.unit.dst_base-288)%128)/8;
+    index=co*192+(dut.y>>1)*16+col;expected=gold0[index];
+   end else if(dut.stage==1) begin
+    co=(dut.unit.dst_base-672)%16;col=((dut.unit.dst_base-672)%128)/16;
+    index=co*48+(dut.y>>1)*8+col;expected=gold1[index];
+   end else begin index=dut.unit.dst_base-1056;expected=gold2[index];end
+   for(j=0;j<25;j=j+1) if(dut.unit.pdata[j*8+:8]!==expected[quad*200+j*8+:8])
+    $fatal(1,"Pool mismatch stage=%0d y=%0d dst=%0d quad=%0d pixel=%0d got=%0d expected=%0d",dut.stage,dut.y,dut.unit.dst_base,quad,j,$signed(dut.unit.pdata[j*8+:8]),$signed(expected[quad*200+j*8+:8]));
+   checks=checks+25;
+  end
+  if(dut.state==dut.SELECT && dut.completed!=0 && dut.stage==0)
+   $display("ENCODER_PROGRESS raw=%0d rows=%0d/%0d/%0d cycles=%0d",raw_rows,stage1_rows,stage2_rows,stage3_rows,cycles);
+  if(fault) $fatal(1,"Core fault error=%0d rows=%0d/%0d/%0d",dut.error_code,stage1_rows,stage2_rows,stage3_rows);
+  if(ticks>3000000) $fatal(1,"Timeout state=%0d loaded=%0d rows=%0d/%0d/%0d",dut.state,raw_rows,stage1_rows,stage2_rows,stage3_rows);
+ end
+ initial begin
+  if($value$plusargs("ddr-delay=%d",ddr_delay)) $display("DDR base latency=%0d",ddr_delay);
+  if(!$value$plusargs("vectors=%s",vectors)) vectors="build/stage2/vectors";
+  $readmemh({vectors,"/frame_rgbx.mem"},memory);$readmemh({vectors,"/stage1_tiles.mem"},gold0);
+  $readmemh({vectors,"/input_crc.mem"},expected_crc);
+  $readmemh({vectors,"/coefficients.mem"},gold_coeff);
+  $readmemh({vectors,"/stage2_tiles.mem"},gold1);$readmemh({vectors,"/stage3_tiles.mem"},gold2);
+  for(block=1;block<=9;block=block+1) begin
+   block_file=$sformatf("%s/block%0d_tiles.mem",vectors,block);
+   $readmemh(block_file,gold_res,(block-1)*384,block*384-1);
+  end
+  if($test$plusargs("continuous")) pause_each_block=0;
+  repeat(5) @(negedge clk);rstn=1;repeat(3) @(negedge clk);
+  if($test$plusargs("seeded")) begin
+   force dut.unit.host_cache_wr=seed_wr;force dut.unit.host_cache_waddr=seed_addr;force dut.unit.host_cache_wdata=seed_data;force dut.unit.host_cache_wmask=40'hffffffffff;
+   for(index=0;index<384;index=index+1) begin
+    @(negedge clk);seed_wr=1;seed_addr=1056+index;seed_data=gold2[index];
+   end
+   @(negedge clk);seed_wr=0;release dut.unit.host_cache_wr;release dut.unit.host_cache_waddr;release dut.unit.host_cache_wdata;release dut.unit.host_cache_wmask;
+   force dut.state=4;@(negedge clk);release dut.state;
+   force dut.encoder_to_residual=1;@(negedge clk);release dut.encoder_to_residual;
+  end else begin start=1;@(negedge clk);start=0;end
+  if(pause_each_block) for(block=1;block<=9;block=block+1) begin
+   wait(paused && blocks_completed==block);@(negedge clk);paused_cycles=cycles;
+   baseline_commands=commands;
+   for(rr=0;rr<384;rr=rr+1) begin
+    @(negedge clk);dbg_addr=residual_output_base+rr;dbg_rd=1;@(negedge clk);dbg_rd=0;
+    if(!dbg_valid || dbg_data!==gold_res[(block-1)*384+rr]) $fatal(1,"Paused block read mismatch block=%0d tile=%0d",block,rr);
+    paused_checks=paused_checks+100;
+   end
+   if(cycles!=paused_cycles || commands!=baseline_commands || dut.core_busy || dut.queued!=0) $fatal(1,"Pause was not quiescent");
+   $display("RESIDUAL_BLOCK_PASS block=%0d cycles=%0d residual=%0d command_wait=%0d",block,block_cycles,residual_cycles,dut.residual_command_wait);
+   @(negedge clk);resume=1;@(negedge clk);resume=0;
+  end
+  wait(done);@(negedge clk);
+  if(res_checks!=345600 || (pause_each_block && paused_checks!=345600) || res_ddr!=0 || blocks_completed!=9) $fatal(1,"Residual counts %0d/%0d DDR=%0d",res_checks,paused_checks,res_ddr);
+  if(!$test$plusargs("seeded") && input_checksum!==expected_crc[0]) $fatal(1,"Input CRC got=%h expected=%h",input_checksum,expected_crc[0]);
+  if(!$test$plusargs("seeded") && (checks!=268800 || loads!=23040 || commands!=45696 || command_wait_cycles!=0 || overlap==0))
+   $fatal(1,"Counts checks=%0d loads=%0d commands=%0d command_wait=%0d overlap=%0d",checks,loads,commands,command_wait_cycles,overlap);
+  if(coefficient_checks!=576) $fatal(1,"Coefficient count %0d",coefficient_checks);
+  for(index=0;index<384;index=index+1) begin
+   @(negedge clk);dbg_addr=residual_output_base+index;dbg_rd=1;@(negedge clk);dbg_rd=0;
+   if(!dbg_valid || dbg_data!==gold_res[3072+index]) $fatal(1,"Final residual tile %0d",index);
+  end
+  $display("PASS instance residual: coefficients=%0d residual_values=%0d paused_values=%0d residual_cycles=%0d encoder_cycles=%0d residual_ddr=%0d; values=%0d final_tiles=384 commands=%0d cycles=%0d busy=%0d command_wait=%0d data_wait=%0d overlapping_row_writes=%0d first_output=%0d",coefficient_checks,res_checks,paused_checks,residual_cycles,encoder_cycles,res_ddr,checks,commands,cycles,mac_cycles,command_wait_cycles,data_wait_cycles,overlap,first_output_cycle);
+  $finish;
+ end
+endmodule
